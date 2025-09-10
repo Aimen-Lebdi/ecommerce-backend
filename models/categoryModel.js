@@ -23,8 +23,19 @@ const categorySchema = new mongoose.Schema(
     },
     image: String,
   },
-  { timestamps: true }
+  { timestamps: true ,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
+  
 );
+
+categorySchema.virtual('productCount', {
+  ref: 'Product', // Reference to Product model
+  localField: '_id',
+  foreignField: 'category',
+  count: true // This makes it return the count instead of documents
+});
 
 const setImageURL = (doc) => {
   if (doc.image) {

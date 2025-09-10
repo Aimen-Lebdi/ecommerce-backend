@@ -8,7 +8,7 @@ exports.createOne = (Model) =>
     res.status(201).json(newDocument);
   });
 
-exports.getAll = (Model, searchFields = []) =>
+exports.getAll = (Model, searchFields = [] ,populationOpt) =>
   expressAsyncHandler(async (req, res, next) => {
     let filter;
     if (req.filterObj) {
@@ -30,8 +30,16 @@ exports.getAll = (Model, searchFields = []) =>
     const documentsCounts = await query.mongooseQuery.clone().countDocuments();
 
     // 4. Apply pagination to the query and get the final documents
-    const documents = await query.paginate(documentsCounts).mongooseQuery;
+// 4. Apply pagination to the query
+    query = query.paginate(documentsCounts);
 
+    // 5. Apply population if specified
+    if (populationOpt) {
+      query.mongooseQuery = query.mongooseQuery.populate(populationOpt);
+    }
+
+    // 6. Execute the final query
+    const documents = await query.mongooseQuery;
     // 5. Check if no documents were found
     if (documents.length === 0) {
       return next(
