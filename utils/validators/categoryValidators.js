@@ -28,6 +28,13 @@ const createCategoryValidator = [
         },
       },
     },
+    image: {
+      isString: {
+        errorMessage: "image must be a string",
+      },
+      optional: true,
+      trim: true,
+    },
   }),
   validatorMiddleware,
 ];
@@ -91,6 +98,13 @@ const updateCategoryValidator = [
         },
       },
     },
+    image: {
+      isString: {
+        errorMessage: "image must be a string",
+      },
+      optional: true,
+      trim: true,
+    },
   }),
   validatorMiddleware,
 ];
@@ -115,10 +129,40 @@ const deleteCategoryValidator = [
   }),
   validatorMiddleware,
 ];
+const deleteManyCategoryValidator = [
+  checkSchema({
+    ids: {
+      isArray: {
+        errorMessage: "IDs must be an array",
+      },
+      notEmpty: {
+        errorMessage: "IDs array cannot be empty",
+      },
+      custom: {
+        options: async (ids) => {
+          if (!Array.isArray(ids)) {
+            throw new Error("IDs must be an array");
+          }
+          
+          // Validate each ID is a valid MongoDB ObjectId
+          for (const id of ids) {
+            if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+              throw new Error(`Invalid category ID: ${id}`);
+            }
+          }
+          
+          return true;
+        },
+      },
+    },
+  }),
+  validatorMiddleware,
+]
 
 module.exports = {
   getOneCategoryValidator,
   createCategoryValidator,
   updateCategoryValidator,
   deleteCategoryValidator,
+  deleteManyCategoryValidator,
 };

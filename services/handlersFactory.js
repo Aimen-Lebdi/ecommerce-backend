@@ -19,7 +19,7 @@ exports.getAll = (Model, searchFields = [] ,populationOpt) =>
 
     // 2. Build the query chain for filtering, searching, and sorting
     // NOTE: We don't apply pagination yet.
-    const query = apiFeatures
+    let query = apiFeatures
       .filter()
       .search(searchFields)
       .sort()
@@ -118,4 +118,29 @@ exports.deleteAll = (Model) =>
       );
     }
     res.status(204).send();
+  });
+
+// Add this new function to handlersFactory.js
+exports.deleteMany = (Model) =>
+  expressAsyncHandler(async (req, res, next) => {
+    const { ids } = req.body; // Expect an array of IDs
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return next(new endpointError("IDs array is required", 400));
+    }
+
+    const deletedDocuments = await Model.deleteMany({ 
+      _id: { $in: ids } 
+    });
+
+    if (!deletedDocuments || deletedDocuments.deletedCount === 0) {
+      return next(
+        new endpointError(`No ${Model.modelName} were deleted`, 404)
+      );
+    }
+
+    res.status(200).json({
+      message: `${deletedDocuments.deletedCount} ${Model.modelName}(s) deleted successfully`,
+      deletedCount: deletedDocuments.deletedCount
+    });
   });

@@ -29,6 +29,7 @@ const getOneCategory = factory.getOne(categoryModel);
 const updateCategory = factory.updateOne(categoryModel);
 const deleteCategory = factory.deleteOne(categoryModel);
 const deleteAllCategories = factory.deleteAll(categoryModel);
+const deleteManyCategories = factory.deleteMany(categoryModel);
 
 module.exports = {
   createCategory,
@@ -37,6 +38,7 @@ module.exports = {
   updateCategory,
   deleteCategory,
   deleteAllCategories,
+  deleteManyCategories,
   uploadCategoryImage,
   resizeCategoryImage,
 };

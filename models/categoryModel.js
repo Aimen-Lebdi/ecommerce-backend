@@ -38,11 +38,15 @@ categorySchema.virtual('productCount', {
 });
 
 const setImageURL = (doc) => {
-  if (doc.image) {
-    const imageUrl = `${process.env.BASE_URL}/products/${doc.image}`;
+  if (doc.image && !doc.image.startsWith('http')) {
+    // Only add base URL if it's not already a full URL
+    const imageUrl = `${process.env.BASE_URL}/categories/${doc.image}`;
     doc.image = imageUrl;
   }
 };
+
+
+
 // findOne, findAll and update
 categorySchema.post("init", (doc) => {
   setImageURL(doc);
@@ -51,6 +55,21 @@ categorySchema.post("init", (doc) => {
 // create
 categorySchema.post("save", (doc) => {
   setImageURL(doc);
+});
+
+// ✅ ADD THIS - For update operations
+categorySchema.post("findOneAndUpdate", async function(doc) {
+  if (doc) {
+    setImageURL(doc);
+  }
+});
+
+// ✅ ADD THIS - For updateOne operations  
+categorySchema.post("updateOne", async function() {
+  const doc = await this.model.findOne(this.getQuery());
+  if (doc) {
+    setImageURL(doc);
+  }
 });
 
 const categoryModel = mongoose.model("Category", categorySchema);
