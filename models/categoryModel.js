@@ -22,30 +22,23 @@ const categorySchema = new mongoose.Schema(
       lowercase: true,
     },
     image: String,
+    productCount: {
+      type: Number,
+      default: 0,
+      min: [0, "Product count cannot be negative"],
+    },
   },
-  { timestamps: true ,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+  {
+    timestamps: true,
   }
-  
 );
 
-categorySchema.virtual('productCount', {
-  ref: 'Product', // Reference to Product model
-  localField: '_id',
-  foreignField: 'category',
-  count: true // This makes it return the count instead of documents
-});
-
 const setImageURL = (doc) => {
-  if (doc.image && !doc.image.startsWith('http')) {
-    // Only add base URL if it's not already a full URL
+  if (doc.image && !doc.image.startsWith("http")) {
     const imageUrl = `${process.env.BASE_URL}/categories/${doc.image}`;
     doc.image = imageUrl;
   }
 };
-
-
 
 // findOne, findAll and update
 categorySchema.post("init", (doc) => {
@@ -57,20 +50,40 @@ categorySchema.post("save", (doc) => {
   setImageURL(doc);
 });
 
-// ✅ ADD THIS - For update operations
-categorySchema.post("findOneAndUpdate", async function(doc) {
+// For update operations
+categorySchema.post("findOneAndUpdate", async function (doc) {
   if (doc) {
     setImageURL(doc);
   }
 });
 
-// ✅ ADD THIS - For updateOne operations  
-categorySchema.post("updateOne", async function() {
+// For updateOne operations
+categorySchema.post("updateOne", async function () {
   const doc = await this.model.findOne(this.getQuery());
   if (doc) {
     setImageURL(doc);
   }
 });
+
+// Static method to update product count for a category
+categorySchema.statics.updateProductCount = async function (categoryId) {
+  const Product = mongoose.model("Product");
+  const count = await Product.countDocuments({ category: categoryId });
+  await this.findByIdAndUpdate(categoryId, { productCount: count });
+  return count;
+};
+
+// Static method to recalculate all product counts
+categorySchema.statics.recalculateAllProductCounts = async function () {
+  const Product = mongoose.model("Product");
+  const categories = await this.find({});
+
+  for (const category of categories) {
+    const count = await Product.countDocuments({ category: category._id });
+    category.productCount = count;
+    await category.save();
+  }
+};
 
 const categoryModel = mongoose.model("Category", categorySchema);
 

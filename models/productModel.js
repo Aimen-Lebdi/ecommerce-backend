@@ -117,7 +117,6 @@ const productSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    // to enable virtual populate
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
@@ -145,6 +144,61 @@ productSchema.pre(/^find/, function (next) {
   next();
 });
 
+// Middleware to update category product count when a product is saved
+productSchema.post("save", async function (doc) {
+  setImageURL(doc);
+
+  // Update category product count
+  const Category = mongoose.model("Category");
+  await Category.updateProductCount(doc.category);
+});
+
+// Middleware to update category product count when a product is removed
+productSchema.post("findOneAndDelete", async function (doc) {
+  if (doc && doc.category) {
+    const Category = mongoose.model("Category");
+    await Category.updateProductCount(doc.category);
+  }
+});
+
+productSchema.post("deleteOne", async function () {
+  const doc = this.getQuery();
+  if (doc && doc._id) {
+    const product = await this.model.findById(doc._id);
+    if (product && product.category) {
+      const Category = mongoose.model("Category");
+      await Category.updateProductCount(product.category);
+    }
+  }
+});
+
+// Middleware to handle category change during update
+productSchema.pre("findOneAndUpdate", async function () {
+  // Store the original document to compare categories later
+  this._originalProduct = await this.model.findOne(this.getQuery());
+});
+
+productSchema.post("findOneAndUpdate", async function (doc) {
+  if (doc) {
+    setImageURL(doc);
+
+    const Category = mongoose.model("Category");
+    const originalProduct = this._originalProduct;
+
+    // If category was changed, update both old and new categories
+    if (
+      originalProduct &&
+      originalProduct.category.toString() !== doc.category.toString()
+    ) {
+      await Category.updateProductCount(originalProduct.category);
+      await Category.updateProductCount(doc.category);
+    } else {
+      // If category wasn't changed, just update the current category
+      await Category.updateProductCount(doc.category);
+    }
+  }
+});
+
 const setImageURL = (doc) => {
   if (doc.mainImage) {
     const imageUrl = `${process.env.BASE_URL}/products/${doc.mainImage}`;
@@ -159,13 +213,9 @@ const setImageURL = (doc) => {
     doc.images = imagesList;
   }
 };
+
 // findOne, findAll and update
 productSchema.post("init", (doc) => {
-  setImageURL(doc);
-});
-
-// create
-productSchema.post("save", (doc) => {
   setImageURL(doc);
 });
 

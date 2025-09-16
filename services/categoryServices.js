@@ -23,8 +23,12 @@ const resizeCategoryImage = expressAsyncHandler(async (req, res, next) => {
   next();
 });
 
+const getAllCategories = factory.getAll(
+  categoryModel,
+  ["name"],
+  "productCount"
+);
 const createCategory = factory.createOne(categoryModel);
-const getAllCategories = factory.getAll(categoryModel, ["name"] ,"productCount");
 const getOneCategory = factory.getOne(categoryModel);
 const updateCategory = factory.updateOne(categoryModel);
 const deleteCategory = factory.deleteOne(categoryModel);

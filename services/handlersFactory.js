@@ -8,7 +8,7 @@ exports.createOne = (Model) =>
     res.status(201).json(newDocument);
   });
 
-exports.getAll = (Model, searchFields = [] ,populationOpt) =>
+exports.getAll = (Model, searchFields = [], populationOpt) =>
   expressAsyncHandler(async (req, res, next) => {
     let filter;
     if (req.filterObj) {
@@ -19,18 +19,14 @@ exports.getAll = (Model, searchFields = [] ,populationOpt) =>
 
     // 2. Build the query chain for filtering, searching, and sorting
     // NOTE: We don't apply pagination yet.
-    let query = apiFeatures
-      .filter()
-      .search(searchFields)
-      .sort()
-      .limitFields();
+    let query = apiFeatures.filter().search(searchFields).sort().limitFields();
 
     // 3. Count the total number of documents that match the filter/search criteria
     // We use .clone() to avoid executing the query twice on the same Mongoose instance
     const documentsCounts = await query.mongooseQuery.clone().countDocuments();
 
     // 4. Apply pagination to the query and get the final documents
-// 4. Apply pagination to the query
+    // 4. Apply pagination to the query
     query = query.paginate(documentsCounts);
 
     // 5. Apply population if specified
@@ -124,23 +120,21 @@ exports.deleteAll = (Model) =>
 exports.deleteMany = (Model) =>
   expressAsyncHandler(async (req, res, next) => {
     const { ids } = req.body; // Expect an array of IDs
-    
+
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return next(new endpointError("IDs array is required", 400));
     }
 
-    const deletedDocuments = await Model.deleteMany({ 
-      _id: { $in: ids } 
+    const deletedDocuments = await Model.deleteMany({
+      _id: { $in: ids },
     });
 
     if (!deletedDocuments || deletedDocuments.deletedCount === 0) {
-      return next(
-        new endpointError(`No ${Model.modelName} were deleted`, 404)
-      );
+      return next(new endpointError(`No ${Model.modelName} were deleted`, 404));
     }
 
     res.status(200).json({
       message: `${deletedDocuments.deletedCount} ${Model.modelName}(s) deleted successfully`,
-      deletedCount: deletedDocuments.deletedCount
+      deletedCount: deletedDocuments.deletedCount,
     });
   });

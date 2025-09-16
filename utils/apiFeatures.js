@@ -1,4 +1,3 @@
-
 /**
  * A reusable class to handle common API query features like filtering,
  * sorting, field limiting, searching, and pagination.
@@ -33,8 +32,8 @@ class ApiFeatures {
    * @param {string} value - The value from the query string.
    */
   _parseValue(value) {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
+    if (value === "true") return true;
+    if (value === "false") return false;
     // Check if the value is a number (integer or float)
     if (!isNaN(Number(value)) && !isNaN(parseFloat(value))) {
       return Number(value);
@@ -47,7 +46,8 @@ class ApiFeatures {
    * It handles simple key-value pairs and nested operators like price[gte].
    */
   filter() {
-    const queryObj = this._cleanQuery();    const mongoQuery = {};
+    const queryObj = this._cleanQuery();
+    const mongoQuery = {};
     // Iterate through all key-value pairs in the cleaned query object
     for (const [key, value] of Object.entries(queryObj)) {
       // Use a regex to check for nested operators like "price[gte]"
@@ -114,10 +114,9 @@ class ApiFeatures {
     if (this.queryString.keyword && Array.isArray(searchFields)) {
       const keyword = this.queryString.keyword;
 
-
       // Map the search fields to a list of MongoDB conditions
-      const searchConditions = searchFields.map(field => ({
-        [field]: { $regex: keyword, $options: "i" }
+      const searchConditions = searchFields.map((field) => ({
+        [field]: { $regex: keyword, $options: "i" },
       }));
       // Use the $or operator to search across multiple fields
       const query = { $or: searchConditions };
