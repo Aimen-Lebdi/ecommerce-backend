@@ -26,8 +26,23 @@ const {
   updateLoggedUserPasswordValidator,
   deleteManyUsersValidator,
 } = require("../utils/validators/userValidators");
+const handleNullValues = (req, res, next) => {
+  // Convert '__NULL__' markers back to null for optional fields
+  if (req.body.subCategory === "__NULL__") {
+    req.body.subCategory = null;
+  }
+  if (req.body.brand === "__NULL__") {
+    req.body.brand = null;
+  }
 
-router.use(authServices.protectRoute);
+  // Also handle empty strings as null for these fields
+  if (req.body.image === "" || req.body.image === "null") {
+    req.body.image = null;
+  }
+
+  next();
+};
+// router.use(authServices.protectRoute);
 
 //User
 // router.use(authServices.allowTo("user"));
@@ -56,7 +71,7 @@ router
 
 router.route("/:id")
 .get(getUserValidator, getOneUser)
-.put(updateUserValidator, updateUser)
+.put(uploadUserImage, resizeUserImage, handleNullValues, updateUserValidator, updateUser)
 .delete(deleteUserValidator, deleteUser);
 
 router.put("/changePassword/:id", updateUserPasswordValidator, updateUserPassword);

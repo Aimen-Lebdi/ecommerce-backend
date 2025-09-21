@@ -30,9 +30,11 @@ const resizeUserImage = expressAsyncHandler(async (req, res, next) => {
 //Admin
 
 const createUser = factory.createOne(User);
-const getAllUsers = factory.getAll(User);
+const getAllUsers = factory.getAll(User ,["name"]);
 const getOneUser = factory.getOne(User);
 const updateUser = expressAsyncHandler(async (req, res, next) => {
+
+  
   const updatedUser = await User.findByIdAndUpdate(
     req.params.id,
     {
@@ -42,6 +44,7 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
       email: req.body.email,
       profileImg: req.body.profileImg,
       role: req.body.role,
+      image: req.body.image,
     },
     { new: true }
   );
