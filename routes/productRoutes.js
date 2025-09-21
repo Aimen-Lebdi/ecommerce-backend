@@ -21,12 +21,22 @@ const { protectRoute, allowTo } = require("../services/authServices");
 const reviewRoutes = require("./reviewRoutes");
 
 const handleNullValues = (req, res, next) => {
-  if (req.body.subCategory === 'null' || req.body.subCategory === '') {
+  // Convert '__NULL__' markers back to null for optional fields
+  if (req.body.subCategory === "__NULL__") {
     req.body.subCategory = null;
   }
-  if (req.body.brand === 'null' || req.body.brand === '') {
+  if (req.body.brand === "__NULL__") {
     req.body.brand = null;
   }
+
+  // Also handle empty strings as null for these fields
+  if (req.body.subCategory === "" || req.body.subCategory === "null") {
+    req.body.subCategory = null;
+  }
+  if (req.body.brand === "" || req.body.brand === "null") {
+    req.body.brand = null;
+  }
+
   next();
 };
 
@@ -46,16 +56,14 @@ router
     resizeProductImages,
     createProductValidator,
     createProduct
-  )
+  );
 
-  router
-  .route("/bulk-delete")
-  .post(
-    // protectRoute,
-    // allowTo("user", "admin"),
-    deleteManyProductsValidator,
-    deleteManyProducts
-  ); 
+router.route("/bulk-delete").post(
+  // protectRoute,
+  // allowTo("user", "admin"),
+  deleteManyProductsValidator,
+  deleteManyProducts
+);
 
 router
   .route("/:id")

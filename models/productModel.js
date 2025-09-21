@@ -79,20 +79,22 @@ const productSchema = new mongoose.Schema(
       ref: "Category",
       required: [true, "Product must belong to a category"],
     },
-    subCategory:{
-        type: mongoose.Schema.Types.ObjectId,
-        validate: {
-          validator: (v) => v === null || v === undefined || mongoose.Types.ObjectId.isValid(v),
-          message: "Subcategory must be a valid ObjectId",
-        },
-        ref: "Subcategory",
-        default: null,
+    subCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      validate: {
+        validator: (v) =>
+          v === null || v === undefined || mongoose.Types.ObjectId.isValid(v),
+        message: "Subcategory must be a valid ObjectId",
       },
-    
+      ref: "Subcategory",
+      default: null,
+    },
+
     brand: {
       type: mongoose.Schema.Types.ObjectId,
       validate: {
-        validator: (v) => v === null || v === undefined || mongoose.Types.ObjectId.isValid(v),
+        validator: (v) =>
+          v === null || v === undefined || mongoose.Types.ObjectId.isValid(v),
         message: "Brand must be a valid ObjectId",
       },
       ref: "Brand",
@@ -224,7 +226,11 @@ productSchema.post("findOneAndUpdate", async function (doc) {
 
     if (originalProduct) {
       // Update category counts if category changed
-      if (originalProduct.category && originalProduct.category.toString() !== (doc.category ? doc.category.toString() : '')) {
+      if (
+        originalProduct.category &&
+        originalProduct.category.toString() !==
+          (doc.category ? doc.category.toString() : "")
+      ) {
         await Category.updateProductCount(originalProduct.category);
       }
       if (doc.category) {
@@ -232,7 +238,11 @@ productSchema.post("findOneAndUpdate", async function (doc) {
       }
 
       // Update subcategory counts if subcategory changed
-      if (originalProduct.subCategory && originalProduct.subCategory.toString() !== (doc.subCategory ? doc.subCategory.toString() : '')) {
+      if (
+        originalProduct.subCategory &&
+        originalProduct.subCategory.toString() !==
+          (doc.subCategory ? doc.subCategory.toString() : "")
+      ) {
         await Subcategory.updateProductCount(originalProduct.subCategory);
       }
       if (doc.subCategory) {
@@ -240,7 +250,11 @@ productSchema.post("findOneAndUpdate", async function (doc) {
       }
 
       // Update brand counts if brand changed
-      if (originalProduct.brand && originalProduct.brand.toString() !== (doc.brand ? doc.brand.toString() : '')) {
+      if (
+        originalProduct.brand &&
+        originalProduct.brand.toString() !==
+          (doc.brand ? doc.brand.toString() : "")
+      ) {
         await Brand.updateProductCount(originalProduct.brand);
       }
       if (doc.brand) {
@@ -249,7 +263,8 @@ productSchema.post("findOneAndUpdate", async function (doc) {
     } else {
       // If no original product, just update current counts
       if (doc.category) await Category.updateProductCount(doc.category);
-      if (doc.subCategory) await Subcategory.updateProductCount(doc.subCategory);
+      if (doc.subCategory)
+        await Subcategory.updateProductCount(doc.subCategory);
       if (doc.brand) await Brand.updateProductCount(doc.brand);
     }
   }
