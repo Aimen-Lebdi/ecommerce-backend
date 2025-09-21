@@ -6,7 +6,7 @@ const {
   getOneProduct,
   updateProduct,
   deleteProduct,
-  deleteAllProducts,
+  deleteManyProducts,
   uploadProductImages,
   resizeProductImages,
 } = require("../services/productServices");
@@ -15,9 +15,20 @@ const {
   getOneProductValidator,
   updateProductValidator,
   deleteProductValidator,
+  deleteManyProductsValidator,
 } = require("../utils/validators/productValidators");
 const { protectRoute, allowTo } = require("../services/authServices");
 const reviewRoutes = require("./reviewRoutes");
+
+const handleNullValues = (req, res, next) => {
+  if (req.body.subCategory === 'null' || req.body.subCategory === '') {
+    req.body.subCategory = null;
+  }
+  if (req.body.brand === 'null' || req.body.brand === '') {
+    req.body.brand = null;
+  }
+  next();
+};
 
 router.use("/:productId/reviews", reviewRoutes);
 
@@ -36,11 +47,15 @@ router
     createProductValidator,
     createProduct
   )
-  .delete(
+
+  router
+  .route("/bulk-delete")
+  .post(
     // protectRoute,
     // allowTo("user", "admin"),
-    deleteAllProducts
-  );
+    deleteManyProductsValidator,
+    deleteManyProducts
+  ); 
 
 router
   .route("/:id")
@@ -55,6 +70,7 @@ router
     // allowTo("user", "admin"),
     uploadProductImages,
     resizeProductImages,
+    handleNullValues,
     updateProductValidator,
     updateProduct
   )

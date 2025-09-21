@@ -11,6 +11,7 @@ const {
   resizeSubCategoryImage,
   fromParamsToBody,
   createFilterObj,
+  deleteManySubCategories,
 } = require("../services/subCategoryServices");
 const {
   getAllSubCategoriesValidator,
@@ -19,6 +20,7 @@ const {
   updateSubCategoryValidator,
   deleteSubCategoryValidator,
   deleteAllSubCategoriesValidator,
+  deleteManySubCategoriesValidator,
 } = require("../utils/validators/subCategoryValidators");
 const { protectRoute, allowTo } = require("../services/authServices");
 
@@ -40,13 +42,16 @@ router
     createSubCategoryValidator,
     createSubCategory
   )
-  .delete(
+
+router
+  .route("/bulk-delete")
+  .post(
     // protectRoute,
     // allowTo("user", "admin"),
     createFilterObj,
-    deleteAllSubCategoriesValidator,
-    deleteAllSubCategories
-  );
+    deleteManySubCategoriesValidator,
+    deleteManySubCategories
+  ); 
 
 router
   .route("/:id")

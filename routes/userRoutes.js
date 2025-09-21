@@ -7,13 +7,13 @@ const {
   updateUser,
   updateUserPassword,
   deleteUser,
-  deleteAllUsers,
   getLoggedUserData,
   updateLoggedUserPassword,
   updateLoggedUserData,
   deleteLoggedUserData,
   uploadUserImage,
-  resizeUserImage
+  resizeUserImage,
+  deleteManyUsers
 } = require("../services/userServices");
 const authServices = require("../services/authServices");
 const {
@@ -24,6 +24,7 @@ const {
   updateUserPasswordValidator,
   updateLoggedUserDataValidator,
   updateLoggedUserPasswordValidator,
+  deleteManyUsersValidator,
 } = require("../utils/validators/userValidators");
 
 router.use(authServices.protectRoute);
@@ -43,7 +44,15 @@ router.delete("/deleteMe", deleteLoggedUserData);
 router.route("/")
 .get(getAllUsers)
 .post(createUserValidator, createUser)
-.delete(deleteAllUsers);
+
+router
+  .route("/bulk-delete")
+  .post(
+    // protectRoute,
+    // allowTo("user", "admin"),
+    deleteManyUsersValidator,
+    deleteManyUsers
+  ); 
 
 router.route("/:id")
 .get(getUserValidator, getOneUser)

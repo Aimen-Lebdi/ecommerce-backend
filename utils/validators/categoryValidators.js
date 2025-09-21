@@ -129,7 +129,7 @@ const deleteCategoryValidator = [
   }),
   validatorMiddleware,
 ];
-const deleteManyCategoryValidator = [
+const deleteManyCategoriesValidator = [
   checkSchema({
     ids: {
       isArray: {
@@ -164,5 +164,5 @@ module.exports = {
   createCategoryValidator,
   updateCategoryValidator,
   deleteCategoryValidator,
-  deleteManyCategoryValidator,
+  deleteManyCategoriesValidator,
 };

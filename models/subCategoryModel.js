@@ -27,13 +27,20 @@ const subCategorySchema = new mongoose.Schema(
       ref: "Category",
       required: [true, "Subcategory must belong to a category"],
     },
+    productCount: {
+      type: Number,
+      default: 0,
+      min: [0, "Product count cannot be negative"],
+    },
   },
   { timestamps: true }
 );
 
+
+
 const setImageURL = (doc) => {
   if (doc.image) {
-    const imageUrl = `${process.env.BASE_URL}/products/${doc.image}`;
+    const imageUrl = `${process.env.BASE_URL}/subCategories/${doc.image}`;
     doc.image = imageUrl;
   }
 };
@@ -46,6 +53,14 @@ subCategorySchema.post("init", (doc) => {
 subCategorySchema.post("save", (doc) => {
   setImageURL(doc);
 });
+
+// Static method to update product count for a subcategory
+subCategorySchema.statics.updateProductCount = async function (subCategoryId) {
+  const Product = mongoose.model("Product");
+  const count = await Product.countDocuments({ subCategory: subCategoryId });
+  await this.findByIdAndUpdate(subCategoryId, { productCount: count });
+  return count;
+};
 
 const subCategoryModel = mongoose.model("Subcategory", subCategorySchema);
 

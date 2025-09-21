@@ -101,22 +101,6 @@ exports.deleteOne = (Model) =>
     res.status(204).send();
   });
 
-exports.deleteAll = (Model) =>
-  expressAsyncHandler(async (req, res, next) => {
-    let filter;
-    if (req.filterObj) {
-      filter = req.filterObj;
-    }
-    const deletedDocuments = await Model.deleteMany(filter);
-    if (!deletedDocuments || deletedDocuments.deletedCount === 0) {
-      return next(
-        new endpointError(`there are no ${Model.modelName} to delete`, 404)
-      );
-    }
-    res.status(204).send();
-  });
-
-// Add this new function to handlersFactory.js
 exports.deleteMany = (Model) =>
   expressAsyncHandler(async (req, res, next) => {
     const { ids } = req.body; // Expect an array of IDs

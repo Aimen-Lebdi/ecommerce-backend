@@ -22,13 +22,18 @@ const brandSchema = new mongoose.Schema(
       lowercase: true,
     },
     image: String,
+    productCount: {
+      type: Number,
+      default: 0,
+      min: [0, "Product count cannot be negative"],
+    },
   },
   { timestamps: true }
 );
 
 const setImageURL = (doc) => {
   if (doc.image) {
-    const imageUrl = `${process.env.BASE_URL}/products/${doc.image}`;
+    const imageUrl = `${process.env.BASE_URL}/brands/${doc.image}`;
     doc.image = imageUrl;
   }
 };
@@ -41,6 +46,14 @@ brandSchema.post("init", (doc) => {
 brandSchema.post("save", (doc) => {
   setImageURL(doc);
 });
+
+// Static method to update product count for a brand
+brandSchema.statics.updateProductCount = async function (brandId) {
+  const Product = mongoose.model("Product");
+  const count = await Product.countDocuments({ brand: brandId });
+  await this.findByIdAndUpdate(brandId, { productCount: count });
+  return count;
+};
 
 const brandModel = mongoose.model("Brand", brandSchema);
 

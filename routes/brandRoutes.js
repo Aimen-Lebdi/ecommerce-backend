@@ -6,7 +6,7 @@ const {
   getOneBrand,
   updateBrand,
   deleteBrand,
-  deleteAllBrands,
+  deleteManyBrands,
   uploadBrandImage,
   resizeBrandImage,
 } = require("../services/brandServices");
@@ -15,6 +15,7 @@ const {
   getOneBrandValidator,
   updateBrandValidator,
   deleteBrandValidator,
+  deleteManyBrandsValidator,
 } = require("../utils/validators/brandValidators");
 const {protectRoute, allowTo} = require("../services/authServices");
 
@@ -34,11 +35,15 @@ router
     createBrandValidator,
     createBrand
   )
-  .delete(
+
+  router
+  .route("/bulk-delete")
+  .post(
     // protectRoute,
     // allowTo("user", "admin"),
-    deleteAllBrands
-  );
+    deleteManyBrandsValidator,
+    deleteManyBrands
+  ); 
 
 router
   .route("/:id")

@@ -40,5 +40,3 @@ exports.updateReview = factory.updateOne(Review);
 // @route   DELETE /api/v1/reviews/:id
 // @access  Private/Protect/User-Admin-Manager
 exports.deleteReview = factory.deleteOne(Review);
-
-exports.deleteAllReviews = factory.deleteAll(Review);

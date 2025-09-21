@@ -39,11 +39,11 @@ const createFilterObj = async (req, res, next) => {
 };
 
 const createSubCategory = factory.createOne(subCategoryModel);
-const getAllSubCategories = factory.getAll(subCategoryModel, ["name"]);
+const getAllSubCategories = factory.getAll(subCategoryModel, ["name"] ,"category");
 const getOneSubCategory = factory.getOne(subCategoryModel);
 const updateSubCategory = factory.updateOne(subCategoryModel);
 const deleteSubCategory = factory.deleteOne(subCategoryModel);
-const deleteAllSubCategories = factory.deleteAll(subCategoryModel);
+const deleteManySubCategories = factory.deleteMany(subCategoryModel);
 
 module.exports = {
   getAllSubCategories,
@@ -51,7 +51,7 @@ module.exports = {
   createSubCategory,
   updateSubCategory,
   deleteSubCategory,
-  deleteAllSubCategories,
+  deleteManySubCategories,
   uploadSubCategoryImage,
   resizeSubCategoryImage,
   fromParamsToBody,

@@ -151,19 +151,29 @@ const deleteSubCategoryValidator = [
   }),
   validatorMiddleware,
 ];
-const deleteAllSubCategoriesValidator = [
+const deleteManySubCategoriesValidator = [
   checkSchema({
-    categoryId: {
-      optional: true,
-      isMongoId: {
-        errorMessage: "Invalid Category ID",
+    ids: {
+      isArray: {
+        errorMessage: "IDs must be an array",
+      },
+      notEmpty: {
+        errorMessage: "IDs array cannot be empty",
       },
       custom: {
-        options: async (val) => {
-          const existingCategory = await categoryModel.findById(val);
-          if (!existingCategory) {
-            throw new Error("Category does not exist");
+        options: async (ids) => {
+          if (!Array.isArray(ids)) {
+            throw new Error("IDs must be an array");
           }
+          
+          // Validate each ID is a valid MongoDB ObjectId
+          for (const id of ids) {
+            if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+              throw new Error(`Invalid category ID: ${id}`);
+            }
+          }
+          
+          return true;
         },
       },
     },
@@ -177,5 +187,5 @@ module.exports = {
   createSubCategoryValidator,
   updateSubCategoryValidator,
   deleteSubCategoryValidator,
-  deleteAllSubCategoriesValidator,
+  deleteManySubCategoriesValidator,
 };

@@ -66,7 +66,7 @@ const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
   res.status(200).json({ data: updatedUserPassword });
 });
 const deleteUser = factory.deleteOne(User);
-const deleteAllUsers = factory.deleteAll(User);
+const deleteManyUsers = factory.deleteMany(User);
 
 //User
 
@@ -122,7 +122,7 @@ module.exports = {
   updateUser,
   updateUserPassword,
   deleteUser,
-  deleteAllUsers,
+  deleteManyUsers,
   getLoggedUserData,
   updateLoggedUserPassword,
   updateLoggedUserData,

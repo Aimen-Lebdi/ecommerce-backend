@@ -1,4 +1,5 @@
 const { checkSchema } = require("express-validator");
+const mongoose = require("mongoose"); // ADD THIS LINE
 const Slugify = require("slugify");
 const validatorMiddleware = require("../../middlewares/validatorMiddleware");
 const productModel = require("../../models/productModel");
@@ -132,40 +133,45 @@ const createProductValidator = [
         },
       },
     },
-    subcategories: {
+    subCategory: {
       optional: true,
-      isMongoId: {
-        errorMessage: "Subcategory ID must be a valid MongoDB ID",
-      },
       custom: {
         options: async (val, { req }) => {
-          await subCategoryModel
-            .findById(req.body.category)
-            .then((subcategories) => {
-              const subCategoriesIdsInDb = [];
-              subcategories.forEach((subcategory) => {
-                subCategoriesIdsInDb.push(subcategory._id.toString());
-              });
-            });
-          const checker = (val, subCategoriesIdsInDb) =>
-            val.every((id) => subCategoriesIdsInDb.includes(id));
-          if (!checker(val, subCategoriesIdsInDb)) {
-            throw new Error("Subcategory does not exist in this category");
+          if (val === null || val === undefined || val === '') {
+            req.body.subCategory = null;
+            return true;
           }
+          
+          if (!mongoose.Types.ObjectId.isValid(val)) {
+            throw new Error("Subcategory ID must be a valid MongoDB ID");
+          }
+          
+          const existingSubcategory = await subCategoryModel.findById(val);
+          if (!existingSubcategory) {
+            throw new Error("SubCategory does not exist");
+          }
+          return true;
         },
       },
     },
     brand: {
       optional: true,
-      isMongoId: {
-        errorMessage: "Brand ID must be a valid MongoDB ID",
-      },
       custom: {
-        options: async (val) => {
+        options: async (val, { req }) => {
+          if (val === null || val === undefined || val === '') {
+            req.body.brand = null;
+            return true;
+          }
+          
+          if (!mongoose.Types.ObjectId.isValid(val)) {
+            throw new Error("Brand ID must be a valid MongoDB ID");
+          }
+          
           const existingBrand = await brandModel.findById(val);
           if (!existingBrand) {
             throw new Error("Brand does not exist");
           }
+          return true;
         },
       },
     },
@@ -188,6 +194,7 @@ const createProductValidator = [
   }),
   validatorMiddleware,
 ];
+
 const getOneProductValidator = [
   checkSchema({
     id: {
@@ -209,6 +216,7 @@ const getOneProductValidator = [
   }),
   validatorMiddleware,
 ];
+
 const updateProductValidator = [
   checkSchema({
     id: {
@@ -229,16 +237,14 @@ const updateProductValidator = [
     },
     name: {
       optional: true,
-
       isString: {
         errorMessage: "Product name must be a string",
       },
-
       trim: true,
       custom: {
         options: async (val, { req }) => {
           console.log("Product name:", val);
-          const existingProduct = await productModel.findOne({ name: val });
+          const existingProduct = await productModel.findOne({ name: val, _id: { $ne: req.params.id } });
           if (existingProduct) {
             throw new Error("Product name already exists");
           }
@@ -249,20 +255,16 @@ const updateProductValidator = [
     },
     description: {
       optional: true,
-
       isString: {
         errorMessage: "Product description must be a string",
       },
-
       trim: true,
     },
     price: {
       optional: true,
-
       isNumeric: {
         errorMessage: "Product price must be a number",
       },
-
       trim: true,
     },
     priceAfterDiscount: {
@@ -284,16 +286,12 @@ const updateProductValidator = [
     },
     mainImage: {
       optional: true,
-
       isString: {
         errorMessage: "Main image must be a string",
       },
-
       trim: true,
     },
     images: {
-      optional: true,
-
       optional: true,
       isArray: {
         errorMessage: "Images must be an array of strings",
@@ -323,7 +321,6 @@ const updateProductValidator = [
     },
     quantity: {
       optional: true,
-
       isNumeric: {
         errorMessage: "Quantity must be a number",
       },
@@ -336,11 +333,9 @@ const updateProductValidator = [
     },
     category: {
       optional: true,
-
       isMongoId: {
         errorMessage: "Category ID must be a valid MongoDB ID",
       },
-
       custom: {
         options: async (val) => {
           const existingCategory = await categoryModel.findById(val);
@@ -350,42 +345,45 @@ const updateProductValidator = [
         },
       },
     },
-    subcategories: {
+    subCategory: {
       optional: true,
-
-      isMongoId: {
-        errorMessage: "Subcategory ID must be a valid MongoDB ID",
-      },
-
       custom: {
         options: async (val, { req }) => {
-          await subCategoryModel
-            .findById(req.body.category)
-            .then((subcategories) => {
-              const subCategoriesIdsInDb = [];
-              subcategories.forEach((subcategory) => {
-                subCategoriesIdsInDb.push(subcategory._id.toString());
-              });
-            });
-          const checker = (val, subCategoriesIdsInDb) =>
-            val.every((id) => subCategoriesIdsInDb.includes(id));
-          if (!checker(val, subCategoriesIdsInDb)) {
-            throw new Error("Subcategory does not exist in this category");
+          if (val === null || val === undefined || val === '') {
+            req.body.subCategory = null;
+            return true;
           }
+          
+          if (!mongoose.Types.ObjectId.isValid(val)) {
+            throw new Error("Subcategory ID must be a valid MongoDB ID");
+          }
+          
+          const existingSubcategory = await subCategoryModel.findById(val);
+          if (!existingSubcategory) {
+            throw new Error("SubCategory does not exist");
+          }
+          return true;
         },
       },
     },
     brand: {
       optional: true,
-      isMongoId: {
-        errorMessage: "Brand ID must be a valid MongoDB ID",
-      },
       custom: {
-        options: async (val) => {
+        options: async (val, { req }) => {
+          if (val === null || val === undefined || val === '') {
+            req.body.brand = null;
+            return true;
+          }
+          
+          if (!mongoose.Types.ObjectId.isValid(val)) {
+            throw new Error("Brand ID must be a valid MongoDB ID");
+          }
+          
           const existingBrand = await brandModel.findById(val);
           if (!existingBrand) {
             throw new Error("Brand does not exist");
           }
+          return true;
         },
       },
     },
@@ -408,6 +406,7 @@ const updateProductValidator = [
   }),
   validatorMiddleware,
 ];
+
 const deleteProductValidator = [
   checkSchema({
     id: {
@@ -430,9 +429,39 @@ const deleteProductValidator = [
   validatorMiddleware,
 ];
 
+const deleteManyProductsValidator = [
+  checkSchema({
+    ids: {
+      isArray: {
+        errorMessage: "IDs must be an array",
+      },
+      notEmpty: {
+        errorMessage: "IDs array cannot be empty",
+      },
+      custom: {
+        options: async (ids) => {
+          if (!Array.isArray(ids)) {
+            throw new Error("IDs must be an array");
+          }
+          
+          for (const id of ids) {
+            if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+              throw new Error(`Invalid category ID: ${id}`);
+            }
+          }
+          
+          return true;
+        },
+      },
+    },
+  }),
+  validatorMiddleware,
+]
+
 module.exports = {
   createProductValidator,
   getOneProductValidator,
   updateProductValidator,
   deleteProductValidator,
+  deleteManyProductsValidator,
 };

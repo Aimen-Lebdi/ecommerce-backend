@@ -7,17 +7,16 @@ const {
   getOneCategory,
   updateCategory,
   deleteCategory,
-  deleteAllCategories,
+  deleteManyCategories,
   uploadCategoryImage,
   resizeCategoryImage,
-  deleteManyCategories,
 } = require("../services/categoryServices");
 const {
   createCategoryValidator,
   getOneCategoryValidator,
   updateCategoryValidator,
   deleteCategoryValidator,
-  deleteManyCategoryValidator,
+  deleteManyCategoriesValidator,
 } = require("../utils/validators/categoryValidators");
 const { protectRoute, allowTo } = require("../services/authServices");
 
@@ -39,11 +38,6 @@ router
     createCategoryValidator,
     createCategory
   )
-  .delete(
-    // protectRoute,
-    // allowTo("user", "admin"),
-    deleteAllCategories
-  );
 
 // ✅ ADD THIS: New route for bulk delete
 router
@@ -51,7 +45,7 @@ router
   .post(
     // protectRoute,
     // allowTo("user", "admin"),
-    deleteManyCategoryValidator,
+    deleteManyCategoriesValidator,
     deleteManyCategories
   );  
 

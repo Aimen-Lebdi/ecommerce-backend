@@ -6,7 +6,6 @@ const {
   getReviewValidator,
   updateReviewValidator,
   deleteReviewValidator,
-  deleteAllReviewValidator
 } = require('../utils/validators/reviewValidators');
 
 const {
@@ -15,7 +14,6 @@ const {
   createReview,
   updateReview,
   deleteReview,
-  deleteAllReviews,
   createFilterObj,
   setParamsToBody,
 } = require("../services/reviewServices");
@@ -40,13 +38,7 @@ router
     createReviewValidator,
     createReview
   )
-  .delete(
-    // protectRoute,
-    // allowTo("user", "admin"),
-    createFilterObj,
-    deleteAllReviewValidator,
-    deleteAllReviews
-  );
+
 router
   .route("/:id")
   .get(

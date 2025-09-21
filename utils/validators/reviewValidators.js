@@ -161,30 +161,10 @@ const deleteReviewValidator = [
   validatorMiddleware,
 ];
 
-const deleteAllReviewValidator = [
-  checkSchema({
-    product: {
-      optional: true,
-      isMongoId: { errorMessage: "Product ID must be a valid MongoDB ID" },
-      notEmpty: { errorMessage: "Product ID is required" },
-      custom: {
-        options: async (val) => {
-          const existingProduct = await productModel.findById(val);
-          if (!existingProduct) {
-            throw new Error("Product does not exist");
-          }
-        },
-      },
-    },
-  }),
-  validatorMiddleware,
-];
-
 module.exports = {
   createReviewValidator,
   getAllReviewValidator,
   getReviewValidator,
   updateReviewValidator,
   deleteReviewValidator,
-  deleteAllReviewValidator,
 };

@@ -29,7 +29,8 @@ const getAllBrands = factory.getAll(brandModel, ["name"]);
 const getOneBrand = factory.getOne(brandModel);
 const updateBrand = factory.updateOne(brandModel);
 const deleteBrand = factory.deleteOne(brandModel);
-const deleteAllBrands = factory.deleteAll(brandModel);
+const deleteManyBrands = factory.deleteMany(brandModel);
+
 
 module.exports = {
   getAllBrands,
@@ -37,7 +38,7 @@ module.exports = {
   createBrand,
   updateBrand,
   deleteBrand,
-  deleteAllBrands,
+  deleteManyBrands,
   uploadBrandImage,
   resizeBrandImage,
 };

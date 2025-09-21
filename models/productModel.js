@@ -79,23 +79,24 @@ const productSchema = new mongoose.Schema(
       ref: "Category",
       required: [true, "Product must belong to a category"],
     },
-    subCategories: [
-      {
+    subCategory:{
         type: mongoose.Schema.Types.ObjectId,
         validate: {
-          validator: (v) => mongoose.Types.ObjectId.isValid(v),
+          validator: (v) => v === null || v === undefined || mongoose.Types.ObjectId.isValid(v),
           message: "Subcategory must be a valid ObjectId",
         },
         ref: "Subcategory",
+        default: null,
       },
-    ],
+    
     brand: {
       type: mongoose.Schema.Types.ObjectId,
       validate: {
-        validator: (v) => mongoose.Types.ObjectId.isValid(v),
+        validator: (v) => v === null || v === undefined || mongoose.Types.ObjectId.isValid(v),
         message: "Brand must be a valid ObjectId",
       },
       ref: "Brand",
+      default: null,
     },
     rating: {
       type: Number,
@@ -134,7 +135,7 @@ productSchema.pre(/^find/, function (next) {
     select: "name _id",
   });
   this.populate({
-    path: "subCategories",
+    path: "subCategory",
     select: "name _id",
   });
   this.populate({
@@ -149,15 +150,39 @@ productSchema.post("save", async function (doc) {
   setImageURL(doc);
 
   // Update category product count
-  const Category = mongoose.model("Category");
-  await Category.updateProductCount(doc.category);
+  if (doc.category) {
+    const Category = mongoose.model("Category");
+    await Category.updateProductCount(doc.category);
+  }
+
+  // Update subcategory product count
+  if (doc.subCategory) {
+    const Subcategory = mongoose.model("Subcategory");
+    await Subcategory.updateProductCount(doc.subCategory);
+  }
+
+  // Update brand product count
+  if (doc.brand) {
+    const Brand = mongoose.model("Brand");
+    await Brand.updateProductCount(doc.brand);
+  }
 });
 
 // Middleware to update category product count when a product is removed
 productSchema.post("findOneAndDelete", async function (doc) {
-  if (doc && doc.category) {
-    const Category = mongoose.model("Category");
-    await Category.updateProductCount(doc.category);
+  if (doc) {
+    if (doc.category) {
+      const Category = mongoose.model("Category");
+      await Category.updateProductCount(doc.category);
+    }
+    if (doc.subCategory) {
+      const Subcategory = mongoose.model("Subcategory");
+      await Subcategory.updateProductCount(doc.subCategory);
+    }
+    if (doc.brand) {
+      const Brand = mongoose.model("Brand");
+      await Brand.updateProductCount(doc.brand);
+    }
   }
 });
 
@@ -165,9 +190,19 @@ productSchema.post("deleteOne", async function () {
   const doc = this.getQuery();
   if (doc && doc._id) {
     const product = await this.model.findById(doc._id);
-    if (product && product.category) {
-      const Category = mongoose.model("Category");
-      await Category.updateProductCount(product.category);
+    if (product) {
+      if (product.category) {
+        const Category = mongoose.model("Category");
+        await Category.updateProductCount(product.category);
+      }
+      if (product.subCategory) {
+        const Subcategory = mongoose.model("Subcategory");
+        await Subcategory.updateProductCount(product.subCategory);
+      }
+      if (product.brand) {
+        const Brand = mongoose.model("Brand");
+        await Brand.updateProductCount(product.brand);
+      }
     }
   }
 });
@@ -183,18 +218,39 @@ productSchema.post("findOneAndUpdate", async function (doc) {
     setImageURL(doc);
 
     const Category = mongoose.model("Category");
+    const Subcategory = mongoose.model("Subcategory");
+    const Brand = mongoose.model("Brand");
     const originalProduct = this._originalProduct;
 
-    // If category was changed, update both old and new categories
-    if (
-      originalProduct &&
-      originalProduct.category.toString() !== doc.category.toString()
-    ) {
-      await Category.updateProductCount(originalProduct.category);
-      await Category.updateProductCount(doc.category);
+    if (originalProduct) {
+      // Update category counts if category changed
+      if (originalProduct.category && originalProduct.category.toString() !== (doc.category ? doc.category.toString() : '')) {
+        await Category.updateProductCount(originalProduct.category);
+      }
+      if (doc.category) {
+        await Category.updateProductCount(doc.category);
+      }
+
+      // Update subcategory counts if subcategory changed
+      if (originalProduct.subCategory && originalProduct.subCategory.toString() !== (doc.subCategory ? doc.subCategory.toString() : '')) {
+        await Subcategory.updateProductCount(originalProduct.subCategory);
+      }
+      if (doc.subCategory) {
+        await Subcategory.updateProductCount(doc.subCategory);
+      }
+
+      // Update brand counts if brand changed
+      if (originalProduct.brand && originalProduct.brand.toString() !== (doc.brand ? doc.brand.toString() : '')) {
+        await Brand.updateProductCount(originalProduct.brand);
+      }
+      if (doc.brand) {
+        await Brand.updateProductCount(doc.brand);
+      }
     } else {
-      // If category wasn't changed, just update the current category
-      await Category.updateProductCount(doc.category);
+      // If no original product, just update current counts
+      if (doc.category) await Category.updateProductCount(doc.category);
+      if (doc.subCategory) await Subcategory.updateProductCount(doc.subCategory);
+      if (doc.brand) await Brand.updateProductCount(doc.brand);
     }
   }
 });

@@ -60,7 +60,8 @@ const getAllProducts = factory.getAll(Product, ["name", "description"]);
 const getOneProduct = factory.getOne(Product, "reviews");
 const updateProduct = factory.updateOne(Product);
 const deleteProduct = factory.deleteOne(Product);
-const deleteAllProducts = factory.deleteAll(Product);
+const deleteManyProducts = factory.deleteMany(Product);
+
 
 module.exports = {
   uploadProductImages,
@@ -70,5 +71,5 @@ module.exports = {
   getOneProduct,
   updateProduct,
   deleteProduct,
-  deleteAllProducts,
+  deleteManyProducts
 };
