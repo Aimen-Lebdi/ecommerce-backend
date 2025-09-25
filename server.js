@@ -6,6 +6,7 @@ const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
 const dotenv = require("dotenv");
+const http = require("http");
 dotenv.config();
 
 const connectdb = require("./config/connectdb");
@@ -14,9 +15,20 @@ const mountRoutes = require("./routes");
 const endpointError = require("./utils/endpointError");
 const { webhookCheckout } = require("./services/orderServices");
 
+// Socket.IO imports
+const SocketConfig = require("./socket/socketConfig");
+const socketEmitter = require("./utils/socketEmitter");
+
 connectdb();
 
 const app = express();
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.IO
+const socketConfig = new SocketConfig(server);
+socketEmitter.setSocket(socketConfig);
 
 // Enable other domains to access your application
 app.use(cors());
@@ -90,8 +102,11 @@ app.all("*splat", (req, res, next) => {
 app.use(globalErrorMiddleware);
 
 const PORT = process.env.PORT || 5000;
-server = app.listen(PORT, () => {
+
+// Use the HTTP server instead of app.listen
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Socket.IO server is ready`);
 });
 
 process.on("unhandledRejection", (err) => {
@@ -101,3 +116,6 @@ process.on("unhandledRejection", (err) => {
     process.exit(1);
   });
 });
+
+// Export server for testing purposes
+module.exports = server;

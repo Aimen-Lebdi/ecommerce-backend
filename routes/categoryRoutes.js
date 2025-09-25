@@ -25,49 +25,47 @@ router.use("/:categoryId/subcategories", subCategoryRoutes);
 router
   .route("/")
   .get(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("user", "admin"),
     getAllCategories
   )
 
   .post(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("admin"),
     uploadCategoryImage,
     resizeCategoryImage,
     createCategoryValidator,
     createCategory
-  )
+  );
 
 // ✅ ADD THIS: New route for bulk delete
-router
-  .route("/bulk-delete")
-  .post(
-    // protectRoute,
-    // allowTo("user", "admin"),
-    deleteManyCategoriesValidator,
-    deleteManyCategories
-  );  
+router.route("/bulk-delete").post(
+  protectRoute,
+  allowTo("admin"),
+  deleteManyCategoriesValidator,
+  deleteManyCategories
+);
 
 router
   .route("/:id")
   .get(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("user", "admin"),
     getOneCategoryValidator,
     getOneCategory
   )
   .put(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("admin"),
     uploadCategoryImage,
     resizeCategoryImage,
     updateCategoryValidator,
     updateCategory
   )
   .delete(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("admin"),
     deleteCategoryValidator,
     deleteCategory
   );

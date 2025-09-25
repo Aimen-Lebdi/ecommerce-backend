@@ -28,11 +28,11 @@ const getAllCategories = factory.getAll(
   ["name"],
   "productCount"
 );
-const createCategory = factory.createOne(categoryModel);
 const getOneCategory = factory.getOne(categoryModel);
+const deleteManyCategories = factory.deleteMany(categoryModel);
+const createCategory = factory.createOne(categoryModel);
 const updateCategory = factory.updateOne(categoryModel);
 const deleteCategory = factory.deleteOne(categoryModel);
-const deleteManyCategories = factory.deleteMany(categoryModel);
 
 module.exports = {
   createCategory,
