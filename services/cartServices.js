@@ -22,28 +22,37 @@ exports.addProductToCart = asyncHandler(async (req, res, next) => {
   const { productId, color } = req.body;
   const product = await Product.findById(productId);
 
+  if (!product) {
+    return next(new endpointError("Product not found", 404));
+  }
+
   // 1) Get Cart for logged user
   let cart = await Cart.findOne({ user: req.user._id });
 
   if (!cart) {
-    // create cart fot logged user with product
+    // create cart for logged user with product
     cart = await Cart.create({
       user: req.user._id,
       cartItems: [{ product: productId, color, price: product.price }],
     });
   } else {
-    // product exist in cart, update product quantity
-    const productIndex = cart.cartItems.findIndex(
-      (item) => item.product.toString() === productId && item.color === color
-    );
+    // Check if product exists in cart with same color
+    const productIndex = cart.cartItems.findIndex((item) => {
+      // Handle both populated and non-populated product field
+      const itemProductId = item.product._id 
+        ? item.product._id.toString() 
+        : item.product.toString();
+      
+      return itemProductId === productId && item.color === color;
+    });
 
     if (productIndex > -1) {
+      // Product exists in cart with same color, update quantity
       const cartItem = cart.cartItems[productIndex];
       cartItem.quantity += 1;
-
       cart.cartItems[productIndex] = cartItem;
     } else {
-      // product not exist in cart,  push product to cartItems array
+      // Product not exist in cart or different color, push new item
       cart.cartItems.push({ product: productId, color, price: product.price });
     }
   }

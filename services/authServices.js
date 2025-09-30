@@ -90,6 +90,54 @@ exports.allowTo = (...roles) => {
   });
 };
 
+// Add this new middleware to your authServices.js
+
+exports.optionalAuth = expressAsyncHandler(async (req, res, next) => {
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+
+  // If no token, set user as visitor and continue
+  if (!token) {
+    req.user = { role: "visitor" };
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    const currentUser = await userModel.findById(decoded.userId);
+
+    if (!currentUser) {
+      req.user = { role: "visitor" };
+      return next();
+    }
+
+    let passToTimeStamp;
+    if (currentUser.passwordChangedAt) {
+      passToTimeStamp = parseInt(
+        currentUser.passwordChangedAt.getTime() / 1000,
+        10
+      );
+    }
+
+    if (passToTimeStamp > decoded.iat) {
+      req.user = { role: "visitor" };
+      return next();
+    }
+
+    req.user = currentUser;
+    next();
+  } catch (error) {
+    // If token is invalid, treat as visitor
+    req.user = { role: "visitor" };
+    next();
+  }
+});
+
 exports.forgotPassword = expressAsyncHandler(async (req, res, next) => {
   // 1) Get user by email
   const user = await userModel.findOne({ email: req.body.email });

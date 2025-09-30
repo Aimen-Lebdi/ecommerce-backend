@@ -18,15 +18,15 @@ const {
   deleteCategoryValidator,
   deleteManyCategoriesValidator,
 } = require("../utils/validators/categoryValidators");
-const { protectRoute, allowTo } = require("../services/authServices");
+const { protectRoute, allowTo, optionalAuth } = require("../services/authServices");
 
 router.use("/:categoryId/subcategories", subCategoryRoutes);
 
 router
   .route("/")
   .get(
-    protectRoute,
-    allowTo("user", "admin"),
+    optionalAuth,
+    allowTo("user", "admin", "visitor"),
     getAllCategories
   )
 
