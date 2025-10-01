@@ -41,6 +41,49 @@ const orderSchema = new mongoose.Schema(
       enum: ["card", "cash"],
       default: "cash",
     },
+    deliveryStatus: {
+      type: String,
+      enum: [
+        "pending", // Order created, waiting confirmation
+        "confirmed", // Seller confirmed
+        "shipped", // Handed to delivery agency
+        "in_transit", // Being transported
+        "out_for_delivery", // Delivery agent on the way
+        "delivered", // Customer received & paid
+        "completed", // Payment settled with seller
+        "failed", // Delivery failed
+        "returned", // Returned to seller
+        "cancelled", // Order cancelled
+      ],
+      default: "pending",
+    },
+
+    trackingNumber: {
+      type: String,
+      trim: true,
+    },
+
+    // COD specific fields
+    codAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    // Status history for tracking
+    statusHistory: [
+      {
+        status: String,
+        timestamp: { type: Date, default: Date.now },
+        note: String,
+        updatedBy: String, // 'seller', 'delivery_agency', 'system'
+      },
+    ],
+
+    // Delivery agency info
+    deliveryAgency: {
+      name: String,
+      apiResponse: Object, // Store raw API response for debugging
+    },
     isPaid: {
       type: Boolean,
       default: false,
@@ -70,5 +113,3 @@ orderSchema.pre(/^find/, function (next) {
 const orderModel = mongoose.model("Order", orderSchema);
 
 module.exports = orderModel;
-
-

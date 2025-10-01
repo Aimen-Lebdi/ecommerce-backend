@@ -2,11 +2,13 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const asyncHandler = require("express-async-handler");
 const factory = require("./handlersFactory");
 const ApiError = require("../utils/endpointError");
+const axios = require("axios");
 
 const User = require("../models/userModel");
 const Product = require("../models/productModel");
 const Cart = require("../models/cartModel");
 const Order = require("../models/orderModel");
+const DeliveryService = require("./deliveryService");
 
 // @desc    create cash order
 // @route   POST /api/v1/orders/cartId
@@ -31,12 +33,21 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
 
   const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
 
-  // 3) Create order with default paymentMethodType cash
+  // 3) Create order with COD tracking
   const order = await Order.create({
     user: req.user._id,
     cartItems: cart.cartItems,
     shippingAddress: req.body.shippingAddress,
     totalOrderPrice,
+    codAmount: totalOrderPrice, // COD amount equals total
+    deliveryStatus: "pending", // Initial status
+    statusHistory: [
+      {
+        status: "pending",
+        note: "Order created, waiting for seller confirmation",
+        updatedBy: "customer",
+      },
+    ],
   });
 
   // 4) After creating order, decrement product quantity, increment product sold
@@ -53,7 +64,11 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
     await Cart.findByIdAndDelete(req.params.cartId);
   }
 
-  res.status(201).json({ status: "success", data: order });
+  res.status(201).json({
+    status: "success",
+    message: "Order created successfully. Waiting for seller confirmation.",
+    data: order,
+  });
 });
 
 exports.filterOrderForLoggedUser = asyncHandler(async (req, res, next) => {
@@ -207,11 +222,10 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
   res.status(200).json({ status: "success", session });
 });
 
-
 const createCardOrder = async (session) => {
   const cartId = session.client_reference_id;
   const shippingAddress = session.metadata;
-  const oderPrice = session.amount_total / 100;
+  const orderPrice = session.amount_total / 100;
 
   const cart = await Cart.findById(cartId);
   const user = await User.findOne({ email: session.customer_email });
@@ -221,7 +235,7 @@ const createCardOrder = async (session) => {
     user: user._id,
     cartItems: cart.cartItems,
     shippingAddress,
-    totalOrderPrice: oderPrice,
+    totalOrderPrice: orderPrice,
     isPaid: true,
     paidAt: Date.now(),
     paymentMethodType: "card",
@@ -265,4 +279,158 @@ exports.webhookCheckout = asyncHandler(async (req, res, next) => {
   }
 
   res.status(200).json({ received: true });
+});
+
+// @desc    Confirm order (Seller action)
+// @route   PUT /api/v1/orders/:id/confirm
+// @access  Protected/Admin
+exports.confirmOrder = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    return next(
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
+    );
+  }
+
+  if (order.deliveryStatus !== "pending") {
+    return next(
+      new ApiError(`Order already confirmed or in different state`, 400)
+    );
+  }
+
+  // Update to confirmed
+  order.deliveryStatus = "confirmed";
+  order.statusHistory.push({
+    status: "confirmed",
+    note: "Order confirmed by seller",
+    updatedBy: "seller",
+  });
+
+  await order.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Order confirmed. Ready to ship.",
+    data: order,
+  });
+});
+
+// @desc    Ship order (Create shipment with delivery agency)
+// @route   POST /api/v1/orders/:id/ship
+// @access  Protected/Admin
+exports.shipOrder = asyncHandler(async (req, res, next) => {
+  try {
+    const result = await DeliveryService.createShipment(req.params.id);
+    res.status(200).json({
+      status: "success",
+      ...result,
+    });
+  } catch (error) {
+    return next(new ApiError(error.message, 400));
+  }
+});
+
+// @desc    Get order tracking info
+// @route   GET /api/v1/orders/:id/tracking
+// @access  Protected/User-Admin
+exports.getOrderTracking = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.id).populate(
+    "user",
+    "name email"
+  );
+
+  if (!order) {
+    return next(
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
+    );
+  }
+
+  let trackingInfo = null;
+  if (order.trackingNumber) {
+    try {
+      trackingInfo = await DeliveryService.getTrackingInfo(
+        order.trackingNumber
+      );
+    } catch (error) {
+      console.error("Failed to fetch tracking info:", error.message);
+    }
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      order: {
+        _id: order._id,
+        orderNumber: order._id,
+        deliveryStatus: order.deliveryStatus,
+        trackingNumber: order.trackingNumber,
+        isPaid: order.isPaid,
+        isDelivered: order.isDelivered,
+        totalOrderPrice: order.totalOrderPrice,
+        statusHistory: order.statusHistory,
+      },
+      tracking: trackingInfo,
+    },
+  });
+});
+
+// @desc    Webhook endpoint for delivery agency updates
+// @route   POST /api/v1/delivery/webhook
+// @access  Public (but should validate with secret in production)
+exports.deliveryWebhook = asyncHandler(async (req, res, next) => {
+  console.log("📦 Delivery webhook received:", req.body);
+
+  const { event, data } = req.body;
+
+  if (event === "parcel.status.updated") {
+    try {
+      await DeliveryService.updateOrderStatus(data.order_id, {
+        status: data.status,
+        note: `Delivery update: ${data.status}`,
+      });
+
+      console.log(`✅ Order ${data.order_id} updated to: ${data.status}`);
+    } catch (error) {
+      console.error("❌ Webhook processing error:", error.message);
+    }
+  }
+
+  // Always respond 200 to acknowledge webhook
+  res.status(200).json({
+    success: true,
+    message: "Webhook received",
+  });
+});
+
+// @desc    Simulate delivery flow (TESTING ONLY)
+// @route   POST /api/v1/orders/:id/simulate-delivery
+// @access  Protected/Admin
+exports.simulateDelivery = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order || !order.trackingNumber) {
+    return next(
+      new ApiError("Order not shipped yet or tracking number missing", 404)
+    );
+  }
+
+  const { speed = "normal" } = req.body;
+
+  try {
+    const response = await axios.post(
+      `${
+        process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1"
+      }/parcels/${order.trackingNumber}/simulate`,
+      { speed }
+    );
+
+    res.status(200).json({
+      status: "success",
+      message: "Delivery simulation started",
+      data: response.data.data,
+    });
+  } catch (error) {
+    return next(new ApiError(`Simulation failed: ${error.message}`, 400));
+  }
 });

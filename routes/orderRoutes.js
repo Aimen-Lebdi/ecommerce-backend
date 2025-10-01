@@ -7,40 +7,57 @@ const {
   updateOrderToPaid,
   updateOrderToDelivered,
   checkoutSession,
+  confirmOrder, // NEW
+  shipOrder, // NEW
+  getOrderTracking, // NEW
+  simulateDelivery, // NEW (testing only)
+  deliveryWebhook, // NEW
 } = require("../services/orderServices");
 
 const authService = require("../services/authServices");
 
 const router = express.Router();
 
-// router.use(authService.protectRoute);
+// Webhook endpoint (must be BEFORE auth middleware)
+router.post("/delivery/webhook", deliveryWebhook);
 
+// Stripe checkout
 router.get(
   "/checkout-session/:cartId",
+  authService.protectRoute,
   authService.allowTo("user"),
   checkoutSession
 );
 
-router.route("/:cartId").post(authService.allowTo("user"), createCashOrder);
-router.post("/:cartId", authService.allowTo("user"), createCashOrder);
-router.get(
-  "/",
-  // authService.allowTo("user", "admin", "manager"),
-  // filterOrderForLoggedUser,
-  findAllOrders
-);
-router.get("/:id",
+// Create cash order
+router.post(
+  "/:cartId",
+  authService.protectRoute,
   authService.allowTo("user"),
-  findSpecificOrder);
-router.put(
-  "/:id/pay",
-  // authService.allowTo("admin", "manager"),
-  updateOrderToPaid
+  createCashOrder
 );
-router.put(
-  "/:id/deliver",
-  // authService.allowTo("admin", "manager"),
-  updateOrderToDelivered
+
+// Get all orders
+router.get("/", findAllOrders);
+
+// Get specific order
+router.get(
+  "/:id",
+  authService.protectRoute,
+  authService.allowTo("user", "admin"),
+  findSpecificOrder
 );
+
+// COD Workflow endpoints
+router.put("/:id/confirm", confirmOrder); // Seller confirms order
+router.post("/:id/ship", shipOrder); // Create shipment with delivery agency
+router.get("/:id/tracking", authService.protectRoute, getOrderTracking); // Get tracking info
+
+// Testing endpoint
+router.post("/:id/simulate-delivery", simulateDelivery);
+
+// Payment & delivery status updates (admin)
+router.put("/:id/pay", updateOrderToPaid);
+router.put("/:id/deliver", updateOrderToDelivered);
 
 module.exports = router;
