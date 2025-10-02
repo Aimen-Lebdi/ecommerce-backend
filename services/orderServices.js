@@ -41,6 +41,8 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
     totalOrderPrice,
     codAmount: totalOrderPrice, // COD amount equals total
     deliveryStatus: "pending", // Initial status
+    paymentMethodType: "cash",
+    paymentStatus: "pending", // COD waits for delivery
     statusHistory: [
       {
         status: "pending",
@@ -71,6 +73,65 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
   });
 });
 
+// Handle successful payment capture
+const handlePaymentCaptured = async (charge) => {
+  try {
+    // Find order by customer email or metadata
+    const order = await Order.findOne({
+      totalOrderPrice: charge.amount / 100,
+      paymentMethodType: "card",
+      paymentStatus: "authorized",
+    }).sort({ createdAt: -1 });
+
+    if (!order) {
+      console.log("Order not found for charge:", charge.id);
+      return;
+    }
+
+    order.paymentStatus = "confirmed";
+    order.isPaid = true;
+    order.paidAt = new Date();
+    order.statusHistory.push({
+      status: "payment_captured",
+      note: `Payment captured by Stripe. Charge ID: ${charge.id}`,
+      updatedBy: "system",
+    });
+
+    await order.save();
+    console.log(`✅ Payment captured for order: ${order._id}`);
+  } catch (error) {
+    console.error("Error handling payment capture:", error.message);
+  }
+};
+
+// Handle payment refund
+const handlePaymentRefunded = async (charge) => {
+  try {
+    const order = await Order.findOne({
+      totalOrderPrice: charge.amount / 100,
+      paymentMethodType: "card",
+    }).sort({ createdAt: -1 });
+
+    if (!order) {
+      console.log("Order not found for refund:", charge.id);
+      return;
+    }
+
+    order.paymentStatus = "refunded";
+    order.isPaid = false;
+    order.statusHistory.push({
+      status: "payment_refunded",
+      note: `Payment refunded. Charge ID: ${charge.id}`,
+      updatedBy: "system",
+    });
+
+    await order.save();
+    console.log(`↩️ Payment refunded for order: ${order._id}`);
+  } catch (error) {
+    console.error("Error handling payment refund:", error.message);
+  }
+};
+
 exports.filterOrderForLoggedUser = asyncHandler(async (req, res, next) => {
   if (req.user.role === "user") req.filterObj = { user: req.user._id };
   next();
@@ -89,11 +150,11 @@ exports.findSpecificOrder = factory.getOne(Order);
 // @route   PUT /api/v1/orders/:id/pay
 // @access  Protected/Admin-Manager
 exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+  const order = await Order.findById(req.params.orderId);
   if (!order) {
     return next(
       new ApiError(
-        `There is no such a order with this id:${req.params.id}`,
+        `There is no such a order with this id:${req.params.orderId}`,
         404
       )
     );
@@ -112,11 +173,11 @@ exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/orders/:id/deliver
 // @access  Protected/Admin-Manager
 exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+  const order = await Order.findById(req.params.orderId);
   if (!order) {
     return next(
       new ApiError(
-        `There is no such a order with this id:${req.params.id}`,
+        `There is no such a order with this id:${req.params.orderId}`,
         404
       )
     );
@@ -130,51 +191,6 @@ exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({ status: "success", data: updatedOrder });
 });
-
-// @desc    Get checkout session from stripe and send it as response
-// @route   GET /api/v1/orders/checkout-session/cartId
-// @access  Protected/User
-// exports.checkoutSession = asyncHandler(async (req, res, next) => {
-//   // app settings
-//   const taxPrice = 0;
-//   const shippingPrice = 0;
-
-//   // 1) Get cart depend on cartId
-//   const cart = await Cart.findById(req.params.cartId);
-//   if (!cart) {
-//     return next(
-//       new ApiError(`There is no such cart with id ${req.params.cartId}`, 404)
-//     );
-//   }
-
-//   // 2) Get order price depend on cart price "Check if coupon apply"
-//   const cartPrice = cart.totalPriceAfterDiscount
-//     ? cart.totalPriceAfterDiscount
-//     : cart.totalCartPrice;
-
-//   const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
-
-//   // 3) Create stripe checkout session
-//   const session = await stripe.checkout.sessions.create({
-//     line_items: [
-//       {
-//         name: req.user.name,
-//         amount: totalOrderPrice * 100,
-//         currency: "egp",
-//         quantity: 1,
-//       },
-//     ],
-//     mode: "payment",
-//     success_url: `${req.protocol}://${req.get("host")}/orders`,
-//     cancel_url: `${req.protocol}://${req.get("host")}/cart`,
-//     customer_email: req.user.email,
-//     client_reference_id: req.params.cartId,
-//     metadata: req.body.shippingAddress,
-//   });
-
-//   // 4) send session to response
-//   res.status(200).json({ status: "success", session });
-// });
 
 exports.checkoutSession = asyncHandler(async (req, res, next) => {
   // app settings
@@ -230,18 +246,26 @@ const createCardOrder = async (session) => {
   const cart = await Cart.findById(cartId);
   const user = await User.findOne({ email: session.customer_email });
 
-  // 3) Create order with default paymentMethodType card
+  // Create order with AUTHORIZED payment status
   const order = await Order.create({
     user: user._id,
     cartItems: cart.cartItems,
     shippingAddress,
     totalOrderPrice: orderPrice,
-    isPaid: true,
-    paidAt: Date.now(),
     paymentMethodType: "card",
+    paymentStatus: "authorized", // Stripe has authorized the payment
+    deliveryStatus: "pending",
+    isPaid: false, // Will be true when Stripe captures payment
+    statusHistory: [
+      {
+        status: "pending",
+        note: "Order created. Payment authorized by Stripe. Waiting for seller confirmation.",
+        updatedBy: "system",
+      },
+    ],
   });
 
-  // 4) After creating order, decrement product quantity, increment product sold
+  // Decrement product quantity
   if (order) {
     const bulkOption = cart.cartItems.map((item) => ({
       updateOne: {
@@ -251,12 +275,11 @@ const createCardOrder = async (session) => {
     }));
     await Product.bulkWrite(bulkOption, {});
 
-    // 5) Clear cart depend on cartId
     await Cart.findByIdAndDelete(cartId);
   }
 };
 
-// @desc    This webhook will run when stripe payment success paid
+// @desc    This webhook will run when stripe payment events occur
 // @route   POST /webhook-checkout
 // @access  Protected/User
 exports.webhookCheckout = asyncHandler(async (req, res, next) => {
@@ -273,9 +296,31 @@ exports.webhookCheckout = asyncHandler(async (req, res, next) => {
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-  if (event.type === "checkout.session.completed") {
-    //  Create order
-    createCardOrder(event.data.object);
+
+  // Handle different event types
+  switch (event.type) {
+    case "checkout.session.completed":
+      // Payment authorized - create order
+      await createCardOrder(event.data.object);
+      break;
+
+    case "charge.succeeded":
+      // Payment captured successfully
+      await handlePaymentCaptured(event.data.object);
+      break;
+
+    case "charge.refunded":
+      // Payment was refunded
+      await handlePaymentRefunded(event.data.object);
+      break;
+
+    case "payout.paid":
+      // Funds transferred to seller's bank (optional tracking)
+      console.log("💰 Payout completed:", event.data.object.id);
+      break;
+
+    default:
+      console.log(`Unhandled event type: ${event.type}`);
   }
 
   res.status(200).json({ received: true });
@@ -285,11 +330,11 @@ exports.webhookCheckout = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/orders/:id/confirm
 // @access  Protected/Admin
 exports.confirmOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+  const order = await Order.findById(req.params.orderId);
 
   if (!order) {
     return next(
-      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
+      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
     );
   }
 
@@ -321,7 +366,7 @@ exports.confirmOrder = asyncHandler(async (req, res, next) => {
 // @access  Protected/Admin
 exports.shipOrder = asyncHandler(async (req, res, next) => {
   try {
-    const result = await DeliveryService.createShipment(req.params.id);
+    const result = await DeliveryService.createShipment(req.params.orderId);
     res.status(200).json({
       status: "success",
       ...result,
@@ -335,14 +380,14 @@ exports.shipOrder = asyncHandler(async (req, res, next) => {
 // @route   GET /api/v1/orders/:id/tracking
 // @access  Protected/User-Admin
 exports.getOrderTracking = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id).populate(
+  const order = await Order.findById(req.params.orderId).populate(
     "user",
     "name email"
   );
 
   if (!order) {
     return next(
-      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
+      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
     );
   }
 
@@ -407,7 +452,7 @@ exports.deliveryWebhook = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/orders/:id/simulate-delivery
 // @access  Protected/Admin
 exports.simulateDelivery = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+  const order = await Order.findById(req.params.orderId);
 
   if (!order || !order.trackingNumber) {
     return next(
@@ -415,14 +460,14 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const { speed = "normal" } = req.body;
+  const { speed = "normal", scenario = "failed" } = req.body; // ADD scenario parameter
 
   try {
     const response = await axios.post(
       `${
         process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1"
       }/parcels/${order.trackingNumber}/simulate`,
-      { speed }
+      { speed, scenario } // PASS scenario to mock API
     );
 
     res.status(200).json({
@@ -433,4 +478,100 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
   } catch (error) {
     return next(new ApiError(`Simulation failed: ${error.message}`, 400));
   }
+});
+
+// @desc    Cancel order (Customer/Seller action)
+// @route   PUT /api/v1/orders/:id/cancel
+// @access  Protected/User-Admin
+exports.cancelOrder = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.orderId);
+
+  if (!order) {
+    return next(
+      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
+    );
+  }
+
+  // Can only cancel if pending or confirmed (not yet shipped)
+  if (!["pending", "confirmed"].includes(order.deliveryStatus)) {
+    return next(
+      new ApiError(
+        `Cannot cancel order. Current status: ${order.deliveryStatus}. Orders can only be cancelled before shipping.`,
+        400
+      )
+    );
+  }
+
+  // Handle refund for card payments
+  if (
+    order.paymentMethodType === "card" &&
+    order.paymentStatus === "authorized"
+  ) {
+    order.paymentStatus = "refunded";
+    order.statusHistory.push({
+      status: "payment_refunded",
+      note: "Payment authorization released due to cancellation",
+      updatedBy: req.user?.role === "admin" ? "seller" : "customer",
+    });
+  }
+
+  order.deliveryStatus = "cancelled";
+  order.statusHistory.push({
+    status: "cancelled",
+    note: req.body.reason || "Order cancelled by user",
+    updatedBy: req.user?.role === "admin" ? "seller" : "customer",
+  });
+
+  await order.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Order cancelled successfully",
+    data: order,
+  });
+});
+
+// @desc    Confirm card payment order (Seller action)
+// @route   PUT /api/v1/orders/:id/confirm-card
+// @access  Protected/Admin
+exports.confirmCardOrder = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.orderId);
+
+  if (!order) {
+    return next(
+      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
+    );
+  }
+
+  if (order.paymentMethodType !== "card") {
+    return next(
+      new ApiError("This endpoint is only for card payment orders", 400)
+    );
+  }
+
+  if (order.paymentStatus !== "authorized") {
+    return next(
+      new ApiError(
+        `Cannot confirm. Payment status is: ${order.paymentStatus}`,
+        400
+      )
+    );
+  }
+
+  // Update payment status to confirmed
+  order.paymentStatus = "confirmed";
+  order.deliveryStatus = "confirmed";
+  order.statusHistory.push({
+    status: "confirmed",
+    note: "Payment confirmed. Order ready to ship.",
+    updatedBy: "seller",
+  });
+
+  await order.save();
+
+  res.status(200).json({
+    status: "success",
+    message: "Card payment order confirmed. Ready to ship.",
+    data: order,
+  });
 });

@@ -92,6 +92,7 @@ class DeliveryService {
         completed: "completed",
         failed_delivery: "failed",
         returned: "returned",
+        cancelled: "cancelled",
       };
 
       const newStatus = statusMap[deliveryData.status] || order.deliveryStatus;
@@ -105,18 +106,29 @@ class DeliveryService {
         updatedBy: "delivery_agency",
       });
 
-      // If delivered, mark as paid (COD collected)
+      // If delivered, mark accordingly
       if (newStatus === "delivered") {
-        order.isPaid = true;
-        order.paidAt = new Date();
         order.isDelivered = true;
         order.deliveredAt = new Date();
+
+        // For COD: mark as paid when delivered
+        if (order.paymentMethodType === "cash") {
+          order.isPaid = true;
+          order.paidAt = new Date();
+          order.paymentStatus = "completed";
+        }
+
+        // For Card: payment was already authorized, just update delivery
+        if (order.paymentMethodType === "card") {
+          // Payment status remains 'confirmed' until admin marks it 'completed'
+        }
       }
 
-      // If completed, payment is settled with seller
+      // If completed (COD collected or card payment settled)
       if (newStatus === "completed") {
         order.isPaid = true;
         order.isDelivered = true;
+        order.paymentStatus = "completed";
       }
 
       await order.save();

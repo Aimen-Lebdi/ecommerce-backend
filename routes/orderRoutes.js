@@ -9,9 +9,11 @@ const {
   checkoutSession,
   confirmOrder, // NEW
   shipOrder, // NEW
+  cancelOrder, // ADD THIS
   getOrderTracking, // NEW
   simulateDelivery, // NEW (testing only)
-  deliveryWebhook, // NEW
+  deliveryWebhook,
+  confirmCardOrder,
 } = require("../services/orderServices");
 
 const authService = require("../services/authServices");
@@ -42,22 +44,32 @@ router.get("/", findAllOrders);
 
 // Get specific order
 router.get(
-  "/:id",
+  "/:orderId",
   authService.protectRoute,
   authService.allowTo("user", "admin"),
   findSpecificOrder
 );
 
 // COD Workflow endpoints
-router.put("/:id/confirm", confirmOrder); // Seller confirms order
-router.post("/:id/ship", shipOrder); // Create shipment with delivery agency
-router.get("/:id/tracking", authService.protectRoute, getOrderTracking); // Get tracking info
+router.put("/:orderId/confirm", confirmOrder); // Seller confirms order
+router.post("/:orderId/ship", shipOrder); // Create shipment with delivery agency
+router.get("/:orderId/tracking", authService.protectRoute, getOrderTracking); // Get tracking info
+
+// ADD THESE THREE ROUTES:
+router.put("/:orderId/cancel", authService.protectRoute, cancelOrder);
 
 // Testing endpoint
-router.post("/:id/simulate-delivery", simulateDelivery);
+router.post("/:orderId/simulate-delivery", simulateDelivery);
+
+router.put(
+  "/:orderId/confirm-card",
+  authService.protectRoute,
+  authService.allowTo("admin"),
+  confirmCardOrder
+); // Confirm card payment order
 
 // Payment & delivery status updates (admin)
-router.put("/:id/pay", updateOrderToPaid);
-router.put("/:id/deliver", updateOrderToDelivered);
+// router.put("/:orderId/pay", updateOrderToPaid);
+// router.put("/:orderId/deliver", updateOrderToDelivered);
 
 module.exports = router;

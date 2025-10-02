@@ -57,7 +57,19 @@ const orderSchema = new mongoose.Schema(
       ],
       default: "pending",
     },
-
+    paymentStatus: {
+      type: String,
+      enum: [
+        "pending", // Waiting for payment
+        "authorized", // Card authorized (funds on hold)
+        "failed", // Payment failed
+        "confirmed", // Payment confirmed by gateway
+        "refunded", // Fully refunded
+        "partially_refunded", // Partially refunded
+        "completed", // Settled to seller account
+      ],
+      default: "pending",
+    },
     trackingNumber: {
       type: String,
       trim: true,
