@@ -24,10 +24,10 @@ const orderSchema = new mongoose.Schema(
       default: 0,
     },
     shippingAddress: {
+      wilaya: String,
+      dayra: String,
       details: String,
       phone: String,
-      city: String,
-      postalCode: String,
     },
     shippingPrice: {
       type: Number,

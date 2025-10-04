@@ -44,32 +44,32 @@ router.get("/", findAllOrders);
 
 // Get specific order
 router.get(
-  "/:orderId",
+  "/:id",
   authService.protectRoute,
   authService.allowTo("user", "admin"),
   findSpecificOrder
 );
 
 // COD Workflow endpoints
-router.put("/:orderId/confirm", confirmOrder); // Seller confirms order
-router.post("/:orderId/ship", shipOrder); // Create shipment with delivery agency
-router.get("/:orderId/tracking", authService.protectRoute, getOrderTracking); // Get tracking info
+router.put("/:id/confirm", confirmOrder); // Seller confirms order
+router.post("/:id/ship", shipOrder); // Create shipment with delivery agency
+router.get("/:id/tracking", authService.protectRoute, getOrderTracking); // Get tracking info
 
 // ADD THESE THREE ROUTES:
-router.put("/:orderId/cancel", authService.protectRoute, cancelOrder);
+router.put("/:id/cancel", authService.protectRoute, cancelOrder);
 
 // Testing endpoint
-router.post("/:orderId/simulate-delivery", simulateDelivery);
+router.post("/:id/simulate-delivery", simulateDelivery);
 
 router.put(
-  "/:orderId/confirm-card",
+  "/:id/confirm-card",
   authService.protectRoute,
   authService.allowTo("admin"),
   confirmCardOrder
 ); // Confirm card payment order
 
 // Payment & delivery status updates (admin)
-// router.put("/:orderId/pay", updateOrderToPaid);
-// router.put("/:orderId/deliver", updateOrderToDelivered);
+// router.put("/:id/pay", updateOrderToPaid);
+// router.put("/:id/deliver", updateOrderToDelivered);
 
 module.exports = router;

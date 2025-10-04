@@ -40,7 +40,6 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
     {
       name: req.body.name,
       slug: req.body.slug,
-      phone: req.body.phone,
       email: req.body.email,
       profileImg: req.body.profileImg,
       role: req.body.role,
@@ -103,7 +102,6 @@ const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {
     {
       name: req.body.name,
       email: req.body.email,
-      phone: req.body.phone,
       image: req.body.image,
     },
     { new: true }

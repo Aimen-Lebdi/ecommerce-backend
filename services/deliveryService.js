@@ -10,9 +10,9 @@ const WEBHOOK_URL =
 
 class DeliveryService {
   // Create shipment with delivery agency (call after order is confirmed)
-  static async createShipment(orderId) {
+  static async createShipment(id) {
     try {
-      const order = await Order.findById(orderId).populate(
+      const order = await Order.findById(id).populate(
         "user",
         "name email phone"
       );
@@ -38,8 +38,7 @@ class DeliveryService {
         customer_name: order.user.name,
         customer_phone: order.shippingAddress.phone || order.user.phone,
         customer_address: order.shippingAddress.details,
-        wilaya: order.shippingAddress.city,
-        commune: order.shippingAddress.postalCode,
+        wilaya: order.shippingAddress.wilaya,
         product_list: productList,
         price: order.totalOrderPrice,
         webhook_url: WEBHOOK_URL,
@@ -74,9 +73,9 @@ class DeliveryService {
   }
 
   // Update order status from delivery agency webhook
-  static async updateOrderStatus(orderId, deliveryData) {
+  static async updateOrderStatus(id, deliveryData) {
     try {
-      const order = await Order.findById(orderId);
+      const order = await Order.findById(id);
 
       if (!order) {
         throw new Error("Order not found");

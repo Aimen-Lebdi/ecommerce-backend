@@ -100,12 +100,10 @@ const userSchema = mongoose.Schema(
     addresses: [
       {
         id: { type: mongoose.Schema.Types.ObjectId },
-
-        alias: String,
+        wilaya: String,
+        dayra: String,
         details: String,
         phone: String,
-        city: String,
-        postalCode: String,
       },
     ],
   },

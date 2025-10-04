@@ -15,8 +15,7 @@ const DeliveryService = require("./deliveryService");
 // @access  Protected/User
 exports.createCashOrder = asyncHandler(async (req, res, next) => {
   // app settings
-  const taxPrice = 0;
-  const shippingPrice = 0;
+  const shippingPrice = 500;
 
   // 1) Get cart depend on cartId
   const cart = await Cart.findById(req.params.cartId);
@@ -31,7 +30,7 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
 
-  const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
+  const totalOrderPrice = cartPrice + shippingPrice;
 
   // 3) Create order with COD tracking
   const order = await Order.create({
@@ -150,11 +149,11 @@ exports.findSpecificOrder = factory.getOne(Order);
 // @route   PUT /api/v1/orders/:id/pay
 // @access  Protected/Admin-Manager
 exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId);
+  const order = await Order.findById(req.params.id);
   if (!order) {
     return next(
       new ApiError(
-        `There is no such a order with this id:${req.params.orderId}`,
+        `There is no such a order with this id:${req.params.id}`,
         404
       )
     );
@@ -173,11 +172,11 @@ exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/orders/:id/deliver
 // @access  Protected/Admin-Manager
 exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId);
+  const order = await Order.findById(req.params.id);
   if (!order) {
     return next(
       new ApiError(
-        `There is no such a order with this id:${req.params.orderId}`,
+        `There is no such a order with this id:${req.params.id}`,
         404
       )
     );
@@ -194,8 +193,7 @@ exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
 
 exports.checkoutSession = asyncHandler(async (req, res, next) => {
   // app settings
-  const taxPrice = 0;
-  const shippingPrice = 0;
+  const shippingPrice = 500;
 
   // 1) Get cart depend on cartId
   const cart = await Cart.findById(req.params.cartId);
@@ -210,14 +208,13 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
 
-  const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
-
+  const totalOrderPrice = cartPrice + shippingPrice;
   // 3) Create stripe checkout session (new API format)
   const session = await stripe.checkout.sessions.create({
     line_items: [
       {
         price_data: {
-          currency: "egp",
+          currency: "dzd",
           product_data: {
             name: req.user.name, // or product name
           },
@@ -227,11 +224,14 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
       },
     ],
     mode: "payment",
-    success_url: `${req.protocol}://${req.get("host")}/orders`,
+    success_url: `${req.protocol}://${req.get(
+      "host"
+    )}/cart`,
     cancel_url: `${req.protocol}://${req.get("host")}/cart`,
     customer_email: req.user.email,
     client_reference_id: req.params.cartId,
-    metadata: req.body.shippingAddress,
+    // metadata: req.body.shippingAddress,
+    
   });
 
   // 4) send session to response
@@ -330,11 +330,11 @@ exports.webhookCheckout = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/orders/:id/confirm
 // @access  Protected/Admin
 exports.confirmOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId);
+  const order = await Order.findById(req.params.id);
 
   if (!order) {
     return next(
-      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
     );
   }
 
@@ -366,7 +366,7 @@ exports.confirmOrder = asyncHandler(async (req, res, next) => {
 // @access  Protected/Admin
 exports.shipOrder = asyncHandler(async (req, res, next) => {
   try {
-    const result = await DeliveryService.createShipment(req.params.orderId);
+    const result = await DeliveryService.createShipment(req.params.id);
     res.status(200).json({
       status: "success",
       ...result,
@@ -380,14 +380,14 @@ exports.shipOrder = asyncHandler(async (req, res, next) => {
 // @route   GET /api/v1/orders/:id/tracking
 // @access  Protected/User-Admin
 exports.getOrderTracking = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId).populate(
+  const order = await Order.findById(req.params.id).populate(
     "user",
     "name email"
   );
 
   if (!order) {
     return next(
-      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
     );
   }
 
@@ -452,7 +452,7 @@ exports.deliveryWebhook = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/orders/:id/simulate-delivery
 // @access  Protected/Admin
 exports.simulateDelivery = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId);
+  const order = await Order.findById(req.params.id);
 
   if (!order || !order.trackingNumber) {
     return next(
@@ -484,11 +484,11 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/orders/:id/cancel
 // @access  Protected/User-Admin
 exports.cancelOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId);
+  const order = await Order.findById(req.params.id);
 
   if (!order) {
     return next(
-      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
     );
   }
 
@@ -535,11 +535,11 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/orders/:id/confirm-card
 // @access  Protected/Admin
 exports.confirmCardOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.orderId);
+  const order = await Order.findById(req.params.id);
 
   if (!order) {
     return next(
-      new ApiError(`There is no such order with id: ${req.params.orderId}`, 404)
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
     );
   }
 

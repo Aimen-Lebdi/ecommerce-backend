@@ -20,6 +20,7 @@ exports.addAddress = expressAsyncHandler(async (req, res, next) => {
     message: "Address added successfully.",
     data: user.addresses,
   });
+    next();
 });
 
 // @desc    Remove address from user addresses list
@@ -40,6 +41,7 @@ exports.removeAddress = expressAsyncHandler(async (req, res, next) => {
     message: "Address removed successfully.",
     data: user.addresses,
   });
+  next();
 });
 
 // @desc    Get logged user addresses list
@@ -53,4 +55,5 @@ exports.getLoggedUserAddresses = expressAsyncHandler(async (req, res, next) => {
     results: user.addresses.length,
     data: user.addresses,
   });
+    next();
 });
