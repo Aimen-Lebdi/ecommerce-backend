@@ -117,7 +117,7 @@ userSchema.pre("save", async function (next) {
 });
 
 const setImageURL = (doc) => {
-  if (doc.image) {
+  if (doc.image &&!doc.image.startsWith("http")) {
     const imageUrl = `${process.env.BASE_URL}/users/${doc.image}`;
     doc.image = imageUrl;
   }

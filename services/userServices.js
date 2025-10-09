@@ -7,6 +7,7 @@ const bcrypt= require("bcryptjs")
 const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const sharp = require("sharp");
 const { v4: uuidv4 } = require("uuid");
+// const { act } = require("react");
 
 
 const uploadUserImage = uploadSingleImage('image');
@@ -42,6 +43,7 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
       slug: req.body.slug,
       email: req.body.email,
       profileImg: req.body.profileImg,
+      active: req.body.active,
       role: req.body.role,
       image: req.body.image,
     },
@@ -67,8 +69,85 @@ const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
   }
   res.status(200).json({ data: updatedUserPassword });
 });
-const deleteUser = factory.deleteOne(User);
-const deleteManyUsers = factory.deleteMany(User);
+const deleteUser = expressAsyncHandler(async (req, res, next) => {
+  // Instead of deleting, set active to false
+  const deactivatedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    { active: false },
+    { new: true }
+  );
+  
+  if (!deactivatedUser) {
+    return next(new endpointError(`There is no user with this ID`, 404));
+  }
+  
+  res.status(200).json({ 
+    status: 'Success',
+    message: 'User deactivated successfully',
+    data: deactivatedUser 
+  });
+});
+const deleteManyUsers = expressAsyncHandler(async (req, res, next) => {
+  const { ids } = req.body;
+  
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return next(new endpointError('Please provide an array of user IDs', 400));
+  }
+
+  // Instead of deleting, set active to false for all users
+  const result = await User.updateMany(
+    { _id: { $in: ids } },
+    { active: false }
+  );
+
+  res.status(200).json({
+    status: 'Success',
+    message: `${result.modifiedCount} user(s) deactivated successfully`,
+    data: {
+      modifiedCount: result.modifiedCount,
+      matchedCount: result.matchedCount
+    }
+  });
+});
+const activateUser = expressAsyncHandler(async (req, res, next) => {
+  const activatedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    { active: true },
+    { new: true }
+  );
+  
+  if (!activatedUser) {
+    return next(new endpointError(`There is no user with this ID`, 404));
+  }
+  
+  res.status(200).json({ 
+    status: 'Success',
+    message: 'User activated successfully',
+    data: activatedUser 
+  });
+});
+const activateManyUsers = expressAsyncHandler(async (req, res, next) => {
+  const { ids } = req.body;
+  
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return next(new endpointError('Please provide an array of user IDs', 400));
+  }
+
+  // Set active to true for all specified users
+  const result = await User.updateMany(
+    { _id: { $in: ids } },
+    { active: true }
+  );
+
+  res.status(200).json({
+    status: 'Success',
+    message: `${result.modifiedCount} user(s) activated successfully`,
+    data: {
+      modifiedCount: result.modifiedCount,
+      matchedCount: result.matchedCount
+    }
+  });
+});
 
 //User
 
@@ -101,7 +180,7 @@ const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {
     req.user._id,
     {
       name: req.body.name,
-      email: req.body.email,
+      // email: req.body.email,
       image: req.body.image,
     },
     { new: true }
@@ -124,6 +203,8 @@ module.exports = {
   updateUserPassword,
   deleteUser,
   deleteManyUsers,
+  activateUser,
+  activateManyUsers,
   getLoggedUserData,
   updateLoggedUserPassword,
   updateLoggedUserData,

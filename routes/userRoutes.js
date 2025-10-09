@@ -13,7 +13,9 @@ const {
   deleteLoggedUserData,
   uploadUserImage,
   resizeUserImage,
-  deleteManyUsers
+  deleteManyUsers,
+  activateManyUsers,
+  activateUser,
 } = require("../services/userServices");
 const authServices = require("../services/authServices");
 const {
@@ -25,6 +27,7 @@ const {
   updateLoggedUserDataValidator,
   updateLoggedUserPasswordValidator,
   deleteManyUsersValidator,
+  activateManyUsersValidator,
 } = require("../utils/validators/userValidators");
 const handleNullValues = (req, res, next) => {
   // Convert '__NULL__' markers back to null for optional fields
@@ -42,38 +45,83 @@ const handleNullValues = (req, res, next) => {
 
   next();
 };
-// router.use(authServices.protectRoute);
+router.use(authServices.protectRoute);
 
-//User
-// router.use(authServices.allowTo("user"));
+// ===== USER ROUTES =====
+router.get(
+  "/getMe",
+  authServices.allowTo("user"),
+  getLoggedUserData,
+  getOneUser
+);
+router.put(
+  "/updateMe",
+  authServices.allowTo("user"),
+  uploadUserImage,
+  resizeUserImage,
+  updateLoggedUserDataValidator,
+  updateLoggedUserData
+);
+router.put(
+  "/changeMyPassword",
+  authServices.allowTo("user"),
+  updateLoggedUserPasswordValidator,
+  updateLoggedUserPassword
+);
+router.delete("/deleteMe", authServices.allowTo("user"), deleteLoggedUserData);
 
-router.get("/getMe", getLoggedUserData, getOneUser);
-router.put("/updateMe",uploadUserImage,
-  resizeUserImage,updateLoggedUserDataValidator, updateLoggedUserData);
-router.put("/changeMyPassword",updateLoggedUserPasswordValidator, updateLoggedUserPassword);
-router.delete("/deleteMe", deleteLoggedUserData);
-
-//Admin
-// router.use(authServices.allowTo("admin"));
-
-router.route("/")
-.get(getAllUsers)
-.post(createUserValidator, createUser)
-
+// ===== ADMIN ROUTES =====
+router
+  .route("/")
+  .get(authServices.allowTo("admin"), getAllUsers)
+  .post(
+    authServices.allowTo("admin"),
+    uploadUserImage,
+    resizeUserImage,
+    createUserValidator,
+    createUser
+  );
 router
   .route("/bulk-delete")
   .post(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    authServices.allowTo("admin"),
     deleteManyUsersValidator,
     deleteManyUsers
-  ); 
+  );
+  // NEW: Bulk activate route
+router
+  .route("/bulk-activate")
+  .post(
+    authServices.allowTo("admin"),
+    activateManyUsersValidator,
+    activateManyUsers
+  );
+router
+  .route("/:id/activate")
+  .put(
+    authServices.allowTo("admin"),
+    getUserValidator,
+    activateUser
+  );
 
-router.route("/:id")
-.get(getUserValidator, getOneUser)
-.put(uploadUserImage, resizeUserImage, handleNullValues, updateUserValidator, updateUser)
-.delete(deleteUserValidator, deleteUser);
+router
+  .route("/:id")
+  .get(authServices.allowTo("admin"), getUserValidator, getOneUser)
+  .put(
+    authServices.allowTo("admin"),
+    uploadUserImage,
+    resizeUserImage,
+    handleNullValues,
+    updateUserValidator,
+    updateUser
+  )
+  .delete(authServices.allowTo("admin"), deleteUserValidator, deleteUser);
 
-router.put("/changePassword/:id", updateUserPasswordValidator, updateUserPassword);
+router.put(
+  "/changePassword/:id",
+  authServices.allowTo("admin"),
+  updateUserPasswordValidator,
+  updateUserPassword
+);
 
 module.exports = router;

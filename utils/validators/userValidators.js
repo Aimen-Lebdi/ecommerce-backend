@@ -11,7 +11,7 @@ const userModel = require("../../models/userModel");
 const createUserValidator = [
   checkSchema({
     name: {
-      isString: { errorMessage: "Name must be a string" },
+      // isString: { errorMessage: "Name must be a string" },
       notEmpty: { errorMessage: "Name is required" },
       trim: true,
       custom: {
@@ -125,7 +125,35 @@ const deleteManyUsersValidator = [
   }),
   validatorMiddleware,
 ]
-
+const activateManyUsersValidator = [
+  checkSchema({
+    ids: {
+      isArray: {
+        errorMessage: "IDs must be an array",
+      },
+      notEmpty: {
+        errorMessage: "IDs array cannot be empty",
+      },
+      custom: {
+        options: async (ids) => {
+          if (!Array.isArray(ids)) {
+            throw new Error("IDs must be an array");
+          }
+          
+          // Validate each ID is a valid MongoDB ObjectId
+          for (const id of ids) {
+            if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+              throw new Error(`Invalid user ID: ${id}`);
+            }
+          }
+          
+          return true;
+        },
+      },
+    },
+  }),
+  validatorMiddleware,
+];
 // --------------------------------------------------
 // 3. Update User Validator (PUT /:id)
 // --------------------------------------------------
@@ -373,6 +401,7 @@ module.exports = {
   updateUserValidator,
   deleteUserValidator,
   deleteManyUsersValidator,
+  activateManyUsersValidator,
   updateUserPasswordValidator,
   updateLoggedUserPasswordValidator,
   updateLoggedUserDataValidator,

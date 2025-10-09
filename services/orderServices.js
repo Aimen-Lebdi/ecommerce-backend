@@ -192,10 +192,8 @@ exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
 });
 
 exports.checkoutSession = asyncHandler(async (req, res, next) => {
-  // app settings
   const shippingPrice = 500;
 
-  // 1) Get cart depend on cartId
   const cart = await Cart.findById(req.params.cartId);
   if (!cart) {
     return next(
@@ -203,59 +201,110 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
     );
   }
 
-  // 2) Get order price depend on cart price "Check if coupon apply"
   const cartPrice = cart.totalPriceAfterDiscount
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
-
   const totalOrderPrice = cartPrice + shippingPrice;
-  // 3) Create stripe checkout session (new API format)
+
+  // CREATE ORDER IMMEDIATELY (for development only)
+  const shippingAddress = {
+    details: req.body.shippingAddress?.details || "",
+    phone: req.body.shippingAddress?.phone || "",
+    wilaya: req.body.shippingAddress?.wilaya || "",
+    dayra: req.body.shippingAddress?.dayra || "",
+  };
+
+  const order = await Order.create({
+    user: req.user._id,
+    cartItems: cart.cartItems,
+    shippingAddress,
+    totalOrderPrice,
+    paymentMethodType: "card",
+    paymentStatus: "authorized",
+    deliveryStatus: "pending",
+    isPaid: false,
+    statusHistory: [
+      {
+        status: "pending",
+        note: "Order created. Payment authorized by Stripe.",
+        updatedBy: "system",
+      },
+    ],
+  });
+
+  // Decrement inventory
+  const bulkOption = cart.cartItems.map((item) => ({
+    updateOne: {
+      filter: { _id: item.product },
+      update: { $inc: { quantity: -item.quantity, sold: +item.quantity } },
+    },
+  }));
+  await Product.bulkWrite(bulkOption, {});
+  await Cart.findByIdAndDelete(req.params.cartId);
+
+  // Create Stripe session
   const session = await stripe.checkout.sessions.create({
     line_items: [
       {
         price_data: {
           currency: "dzd",
           product_data: {
-            name: req.user.name, // or product name
+            name: `Order for ${req.user.name}`,
           },
-          unit_amount: totalOrderPrice * 100, // amount in cents
+          unit_amount: totalOrderPrice * 100,
         },
         quantity: 1,
       },
     ],
     mode: "payment",
-    success_url: `${req.protocol}://${req.get(
-      "host"
-    )}/cart`,
-    cancel_url: `${req.protocol}://${req.get("host")}/cart`,
+    success_url: `http://localhost:5173/order-confirmation/${order._id}`, // Use order ID directly
+    cancel_url: `http://localhost:5173/checkout`,
     customer_email: req.user.email,
-    client_reference_id: req.params.cartId,
-    // metadata: req.body.shippingAddress,
-    
+    client_reference_id: order._id.toString(), // Store order ID for webhook
   });
 
-  // 4) send session to response
+  // Update order with session ID
+  order.stripeSessionId = session.id;
+  await order.save();
+
   res.status(200).json({ status: "success", session });
 });
 
+// ============================================
+// 3. UPDATE createCardOrder function
+// ============================================
+
 const createCardOrder = async (session) => {
   const cartId = session.client_reference_id;
-  const shippingAddress = session.metadata;
   const orderPrice = session.amount_total / 100;
+
+  // Reconstruct shipping address from metadata
+  const shippingAddress = {
+    details: session.metadata.shippingDetails,
+    phone: session.metadata.shippingPhone,
+    wilaya: session.metadata.shippingWilaya,
+    dayra: session.metadata.shippingDayra,
+  };
 
   const cart = await Cart.findById(cartId);
   const user = await User.findOne({ email: session.customer_email });
 
-  // Create order with AUTHORIZED payment status
+  if (!cart || !user) {
+    console.error("Cart or user not found for session:", session.id);
+    return;
+  }
+
+  // Create order with stripeSessionId
   const order = await Order.create({
     user: user._id,
     cartItems: cart.cartItems,
     shippingAddress,
     totalOrderPrice: orderPrice,
     paymentMethodType: "card",
-    paymentStatus: "authorized", // Stripe has authorized the payment
+    paymentStatus: "authorized",
     deliveryStatus: "pending",
-    isPaid: false, // Will be true when Stripe captures payment
+    isPaid: false,
+    stripeSessionId: session.id, // Store session ID for lookup
     statusHistory: [
       {
         status: "pending",
@@ -274,10 +323,32 @@ const createCardOrder = async (session) => {
       },
     }));
     await Product.bulkWrite(bulkOption, {});
-
     await Cart.findByIdAndDelete(cartId);
   }
+
+  console.log(`✅ Order created: ${order._id} for session: ${session.id}`);
+  return order;
 };
+
+// ============================================
+// 4. ADD getOrderBySession function
+// ============================================
+
+exports.getOrderBySession = asyncHandler(async (req, res, next) => {
+  const order = await Order.findOne({
+    stripeSessionId: req.params.sessionId,
+    user: req.user._id,
+  });
+
+  if (!order) {
+    return next(new ApiError(`No order found for this session`, 404));
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: order,
+  });
+});
 
 // @desc    This webhook will run when stripe payment events occur
 // @route   POST /webhook-checkout
@@ -460,13 +531,11 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const { speed = "normal", scenario = "failed" } = req.body; // ADD scenario parameter
-
+  console.log(req.body)
+  const { speed , scenario  } = req.body; // ADD scenario parameter
   try {
     const response = await axios.post(
-      `${
-        process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1"
-      }/parcels/${order.trackingNumber}/simulate`,
+      `${process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1"}/parcels/${order.trackingNumber}/simulate`,
       { speed, scenario } // PASS scenario to mock API
     );
 
@@ -476,7 +545,7 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
       data: response.data.data,
     });
   } catch (error) {
-    return next(new ApiError(`Simulation failed: ${error.message}`, 400));
+    return next(new ApiError(`Simulation failed: ${error}`, 400));
   }
 });
 

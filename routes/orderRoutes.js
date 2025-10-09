@@ -14,6 +14,7 @@ const {
   simulateDelivery, // NEW (testing only)
   deliveryWebhook,
   confirmCardOrder,
+  getOrderBySession,
 } = require("../services/orderServices");
 
 const authService = require("../services/authServices");
@@ -23,8 +24,16 @@ const router = express.Router();
 // Webhook endpoint (must be BEFORE auth middleware)
 router.post("/delivery/webhook", deliveryWebhook);
 
-// Stripe checkout
+// NEW: Get order by Stripe session ID (must be BEFORE /:id route)
 router.get(
+  "/session/:sessionId",
+  authService.protectRoute,
+  authService.allowTo("user"),
+  getOrderBySession
+);
+
+// Stripe checkout - CHANGE TO POST
+router.post(
   "/checkout-session/:cartId",
   authService.protectRoute,
   authService.allowTo("user"),

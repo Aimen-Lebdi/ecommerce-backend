@@ -80,8 +80,10 @@ exports.protectRoute = expressAsyncHandler(async (req, res, next) => {
 
 exports.allowTo = (...roles) => {
   return expressAsyncHandler(async (req, res, next) => {
+
     if (!roles.includes(req.user.role)) {
       return next(
+        
         new Error("You do not have permission to perform this action")
       );
     }

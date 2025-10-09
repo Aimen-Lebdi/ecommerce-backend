@@ -3,10 +3,10 @@ const Order = require("../models/orderModel");
 
 // Configuration
 const DELIVERY_API_URL =
-  process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1";
+  process.env.DELIVERY_API_URL || "http://localhost:3001/api/api/v1/";
 const WEBHOOK_URL =
   process.env.DELIVERY_WEBHOOK_URL ||
-  "http://localhost:5000/api/v1/delivery/webhook";
+  "http://localhost:5000/api/v1/orders/delivery/webhook";
 
 class DeliveryService {
   // Create shipment with delivery agency (call after order is confirmed)
