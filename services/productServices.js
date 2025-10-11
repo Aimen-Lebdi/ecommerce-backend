@@ -49,8 +49,6 @@ const resizeProductImages = expressAsyncHandler(async (req, res, next) => {
         req.body.images.push(imageName);
       })
     );
-
-    next();
   }
   next();
 });

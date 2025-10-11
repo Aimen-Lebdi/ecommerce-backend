@@ -28,13 +28,8 @@ const handleNullValues = (req, res, next) => {
   if (req.body.brand === "__NULL__") {
     req.body.brand = null;
   }
-
-  // Also handle empty strings as null for these fields
-  if (req.body.subCategory === "" || req.body.subCategory === "null") {
-    req.body.subCategory = null;
-  }
-  if (req.body.brand === "" || req.body.brand === "null") {
-    req.body.brand = null;
+  if (req.body.images === "__NULL__") {
+    req.body.images = null;
   }
 
   next();

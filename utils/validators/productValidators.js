@@ -292,7 +292,7 @@ const updateProductValidator = [
       trim: true,
     },
     images: {
-      optional: true,
+      optional: {options: { nullable: true }},
       isArray: {
         errorMessage: "Images must be an array of strings",
       },

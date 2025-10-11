@@ -216,9 +216,14 @@ const updateUserValidator = [
         errorMessage: "Invalid phone number format",
       },
     },
-    profileImg: {
-      optional: true,
-      isString: { errorMessage: "Profile image must be a string" },
+    image: {
+      isString: {
+        errorMessage: "image must be a string",
+      },
+      isURL: {
+        errorMessage: "Image must be a valid URL",
+      },
+      optional: {options: { nullable: true }},
       trim: true,
     },
   }),

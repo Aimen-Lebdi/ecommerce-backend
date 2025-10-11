@@ -29,6 +29,10 @@ exports.signIn = expressAsyncHandler(async (req, res, next) => {
     return next(new Error("Invalid email or password"));
   }
 
+  if (!user.active){
+    return next(new Error('hi'))
+  }
+
   const token = createToken(user._id);
 
   delete user._doc.password;

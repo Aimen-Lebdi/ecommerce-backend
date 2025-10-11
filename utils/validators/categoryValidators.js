@@ -102,7 +102,10 @@ const updateCategoryValidator = [
       isString: {
         errorMessage: "image must be a string",
       },
-      optional: true,
+      isURL: {
+        errorMessage: "Image must be a valid URL",
+      },
+      optional: {options: { nullable: true }},
       trim: true,
     },
   }),
