@@ -101,10 +101,15 @@ const loginValidator = [
           if (!isMatch) {
             throw new Error("Invalid email or password");
           }
+          // Check if account is active
+          if (!user.active) {
+            throw new Error("Your account has been deactivated. Please contact support for assistance.");
+          }
           return true;
         },
       },
     },
+    
   }),
   validatorMiddleware,
 ];

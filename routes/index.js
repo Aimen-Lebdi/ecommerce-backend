@@ -26,6 +26,7 @@ const mountRoutes = (app) => {
   app.use("/api/cart", cartRoutes);
   app.use("/api/v1/orders", orderRoutes);
   app.use("/api/activities", activityRoutes);
+  app.use("/api/v1/analytics", require("./analyticsRoutes"));
 };
 
 module.exports = mountRoutes;

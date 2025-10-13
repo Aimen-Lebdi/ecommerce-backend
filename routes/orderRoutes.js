@@ -15,6 +15,7 @@ const {
   deliveryWebhook,
   confirmCardOrder,
   getOrderBySession,
+  downloadInvoice,
 } = require("../services/orderServices");
 
 const authService = require("../services/authServices");
@@ -80,5 +81,13 @@ router.put(
 // Payment & delivery status updates (admin)
 // router.put("/:id/pay", updateOrderToPaid);
 // router.put("/:id/deliver", updateOrderToDelivered);
+
+// Add this route
+router.get(
+  "/:id/invoice",
+  authService.protectRoute,
+  authService.allowTo("user", "admin"),
+  downloadInvoice
+);
 
 module.exports = router;

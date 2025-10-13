@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 const userModel = require("../models/userModel");
 const { createToken } = require("../utils/createToken");
 const endpointError = require("../utils/endpointError");
-const  sendEmail  = require("../utils/sendEmail");
+const sendEmail = require("../utils/sendEmail");
 
 exports.signUp = expressAsyncHandler(async (req, res, next) => {
   const user = await userModel.create({
@@ -29,8 +29,14 @@ exports.signIn = expressAsyncHandler(async (req, res, next) => {
     return next(new Error("Invalid email or password"));
   }
 
-  if (!user.active){
-    return next(new Error('hi'))
+  // Check if user account is active
+  if (!user.active) {
+    return next(
+      new endpointError(
+        "Your account has been deactivated. Please contact support for assistance.",
+        403
+      )
+    );
   }
 
   const token = createToken(user._id);
@@ -84,10 +90,8 @@ exports.protectRoute = expressAsyncHandler(async (req, res, next) => {
 
 exports.allowTo = (...roles) => {
   return expressAsyncHandler(async (req, res, next) => {
-
     if (!roles.includes(req.user.role)) {
       return next(
-        
         new Error("You do not have permission to perform this action")
       );
     }

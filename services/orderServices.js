@@ -9,6 +9,7 @@ const Product = require("../models/productModel");
 const Cart = require("../models/cartModel");
 const Order = require("../models/orderModel");
 const DeliveryService = require("./deliveryService");
+const InvoiceService = require("./invoiceService");
 
 // @desc    create cash order
 // @route   POST /api/v1/orders/cartId
@@ -643,4 +644,38 @@ exports.confirmCardOrder = asyncHandler(async (req, res, next) => {
     message: "Card payment order confirmed. Ready to ship.",
     data: order,
   });
+});
+
+// @desc    Download order invoice
+// @route   GET /api/v1/orders/:id/invoice
+// @access  Protected/User-Admin
+exports.downloadInvoice = asyncHandler(async (req, res, next) => {
+  // FIX: Explicitly populate the product and user fields
+  const order = await Order.findById(req.params.id)
+    .populate('user', 'name email phone')
+    .populate('cartItems.product', 'title imageCover');
+
+  if (!order) {
+    return next(
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
+    );
+  }
+
+  // Check if user owns this order (unless admin)
+  if (req.user.role !== "admin" && order.user._id.toString() !== req.user._id.toString()) {
+    return next(new ApiError("You are not authorized to download this invoice", 403));
+  }
+
+  // Generate PDF (now returns a buffer with pdf-lib)
+  const pdfBuffer = await InvoiceService.generateInvoice(order);
+
+  // Set response headers
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=invoice-${order._id}.pdf`
+  );
+
+  // Send buffer
+  res.send(pdfBuffer);
 });
