@@ -14,7 +14,7 @@ const router = express.Router();
 
 router.use(
     authService.protectRoute,
-    authService.allowTo("user")
+    authService.allowTo("user","admin")
   );
 router
   .route("/")
