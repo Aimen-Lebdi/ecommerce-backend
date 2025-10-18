@@ -41,13 +41,13 @@ router.use(authServices.protectRoute);
 // ===== USER ROUTES =====
 router.get(
   "/getMe",
-  authServices.allowTo("user"),
+  authServices.allowTo("user","admin"),
   getLoggedUserData,
   getOneUser
 );
 router.put(
   "/updateMe",
-  authServices.allowTo("user"),
+  authServices.allowTo("user","admin"),
   uploadUserImage,
   resizeUserImage,
   updateLoggedUserDataValidator,
@@ -55,11 +55,11 @@ router.put(
 );
 router.put(
   "/changeMyPassword",
-  authServices.allowTo("user"),
+  authServices.allowTo("user","admin"),
   updateLoggedUserPasswordValidator,
   updateLoggedUserPassword
 );
-router.delete("/deleteMe", authServices.allowTo("user"), deleteLoggedUserData);
+// router.delete("/deleteMe", authServices.allowTo("user"), deleteLoggedUserData);
 
 // ===== ADMIN ROUTES =====
 router

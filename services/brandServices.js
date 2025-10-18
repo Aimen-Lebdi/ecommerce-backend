@@ -5,7 +5,6 @@ const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const sharp = require("sharp");
 const { v4: uuidv4 } = require("uuid");
 
-
 const uploadBrandImage = uploadSingleImage('image');
 
 const resizeBrandImage = expressAsyncHandler(async (req, res, next) => {
@@ -24,13 +23,13 @@ const resizeBrandImage = expressAsyncHandler(async (req, res, next) => {
   next();
 });
 
+// Use factory methods - these now include activity logging
 const createBrand = factory.createOne(brandModel);
 const getAllBrands = factory.getAll(brandModel, ["name"]);
 const getOneBrand = factory.getOne(brandModel);
 const updateBrand = factory.updateOne(brandModel);
 const deleteBrand = factory.deleteOne(brandModel);
 const deleteManyBrands = factory.deleteMany(brandModel);
-
 
 module.exports = {
   getAllBrands,

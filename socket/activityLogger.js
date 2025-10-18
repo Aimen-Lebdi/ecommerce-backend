@@ -14,7 +14,12 @@ class ActivityLogger {
     metadata = {},
   }) {
     try {
-      // Create activity log in database
+      // Safety check for user object
+      if (!user || !user._id || !user.name || !user.role) {
+        console.error("ActivityLogger: Invalid user object", user);
+        return null;
+      }
+
       const activityLog = await ActivityLog.create({
         type,
         activity,
@@ -31,7 +36,6 @@ class ActivityLogger {
         metadata,
       });
 
-      // Format data for real-time emission
       const activityData = {
         _id: activityLog._id,
         type: activityLog.type,
@@ -44,16 +48,18 @@ class ActivityLogger {
         metadata: activityLog.metadata,
       };
 
-      // Emit to dashboard (admins only)
-      if (socketInstance.getSocket()) {
-        socketInstance
-          .getSocket()
-          .emitToDashboard("new_activity", activityData);
-
-        // Also emit to all admins
-        socketInstance
-          .getSocket()
-          .emitToAdmins("activity_update", activityData);
+      // Check if socket instance exists before emitting
+      if (socketInstance && socketInstance.getSocket()) {
+        try {
+          // FIXED: Only emit to dashboard room (admins who joined dashboard)
+          // This prevents duplicate emissions
+          socketInstance.getSocket().emitToDashboard("new_activity", activityData);
+          
+          console.log(`📤 Activity emitted to dashboard: ${activity}`);
+        } catch (socketError) {
+          console.error("Error emitting socket event:", socketError.message);
+          // Don't throw - activity was logged successfully
+        }
       }
 
       return activityLog;
@@ -63,13 +69,8 @@ class ActivityLogger {
     }
   }
 
-  // Specific methods for different activity types
-  static async logCategoryActivity(
-    action,
-    category,
-    user,
-    additionalData = {}
-  ) {
+  // ==================== CATEGORY ACTIVITIES ====================
+  static async logCategoryActivity(action, category, user, additionalData = {}) {
     const activities = {
       create: "Category Created",
       update: "Category Updated",
@@ -99,6 +100,7 @@ class ActivityLogger {
     });
   }
 
+  // ==================== PRODUCT ACTIVITIES ====================
   static async logProductActivity(action, product, user, additionalData = {}) {
     const activities = {
       create: "Product Created",
@@ -107,11 +109,11 @@ class ActivityLogger {
     };
 
     const descriptions = {
-      create: `New product "${product.title}" created`,
+      create: `New product "${product.title}" created with price ${product.price} DZD`,
       update: `Product "${product.title}" updated${
         additionalData.changes ? ` - ${additionalData.changes}` : ""
       }`,
-      delete: `Product "${product.title}" deleted`,
+      delete: `Product "${product.title}" deleted (Stock: ${product.quantity})`,
     };
 
     return await ActivityLogger.logActivity({
@@ -126,24 +128,33 @@ class ActivityLogger {
         productTitle: product.title,
         productPrice: product.price,
         productQuantity: product.quantity,
+        productCategory: product.category,
+        productBrand: product.brand,
         ...additionalData,
       },
     });
   }
 
+  // ==================== ORDER ACTIVITIES ====================
   static async logOrderActivity(action, order, user, additionalData = {}) {
     const activities = {
       create: "New Order Placed",
       update: "Order Updated",
+      confirm: "Order Confirmed",
+      ship: "Order Shipped",
+      deliver: "Order Delivered",
       cancel: "Order Cancelled",
     };
 
     const descriptions = {
-      create: `New order #${order._id.toString().slice(-8)} placed`,
+      create: `New order #${order._id.toString().slice(-8)} placed - Amount: ${order.totalOrderPrice} DZD`,
       update: `Order #${order._id.toString().slice(-8)} updated${
         additionalData.changes ? ` - ${additionalData.changes}` : ""
       }`,
-      cancel: `Order #${order._id.toString().slice(-8)} cancelled`,
+      confirm: `Order #${order._id.toString().slice(-8)} confirmed by seller`,
+      ship: `Order #${order._id.toString().slice(-8)} shipped - Tracking: ${additionalData.trackingNumber || "N/A"}`,
+      deliver: `Order #${order._id.toString().slice(-8)} delivered`,
+      cancel: `Order #${order._id.toString().slice(-8)} cancelled - Reason: ${additionalData.reason || "No reason provided"}`,
     };
 
     return await ActivityLogger.logActivity({
@@ -151,36 +162,40 @@ class ActivityLogger {
       activity: activities[action],
       user,
       description: descriptions[action],
+      status: additionalData.status || "success",
       amount: order.totalOrderPrice || order.totalPrice,
       relatedId: order._id,
       relatedModel: "Order",
       metadata: {
         orderId: order._id,
+        customerName: order.user?.name || "Unknown",
         totalAmount: order.totalOrderPrice || order.totalPrice,
-        status: order.status,
+        paymentMethod: order.paymentMethodType,
+        deliveryStatus: order.deliveryStatus,
+        itemsCount: order.cartItems?.length || 0,
         ...additionalData,
       },
     });
   }
 
-  static async logUserActivity(
-    action,
-    targetUser,
-    adminUser,
-    additionalData = {}
-  ) {
+  // ==================== USER ACTIVITIES ====================
+  static async logUserActivity(action, targetUser, adminUser, additionalData = {}) {
     const activities = {
-      register: "User Registered",
+      create: "User Registered",
       update: "User Updated",
-      delete: "User Deleted",
+      delete: "User Deactivated",
+      activate: "User Activated",
+      passwordChange: "User Password Changed",
     };
 
     const descriptions = {
-      register: `User "${targetUser.name}" registered`,
-      update: `User "${targetUser.name}" updated${
+      create: `User "${targetUser.name}" (${targetUser.email}) registered`,
+      update: `User "${targetUser.name}" profile updated${
         additionalData.changes ? ` - ${additionalData.changes}` : ""
       }`,
-      delete: `User "${targetUser.name}" deleted`,
+      delete: `User "${targetUser.name}" account deactivated`,
+      activate: `User "${targetUser.name}" account activated`,
+      passwordChange: `Password changed for user "${targetUser.name}"`,
     };
 
     return await ActivityLogger.logActivity({
@@ -194,6 +209,253 @@ class ActivityLogger {
         targetUserName: targetUser.name,
         targetUserEmail: targetUser.email,
         targetUserRole: targetUser.role,
+        targetUserActive: targetUser.active,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== BRAND ACTIVITIES ====================
+  static async logBrandActivity(action, brand, user, additionalData = {}) {
+    const activities = {
+      create: "Brand Created",
+      update: "Brand Updated",
+      delete: "Brand Deleted",
+    };
+
+    const descriptions = {
+      create: `New brand "${brand.name}" created`,
+      update: `Brand "${brand.name}" updated${
+        additionalData.changes ? ` - ${additionalData.changes}` : ""
+      }`,
+      delete: `Brand "${brand.name}" deleted`,
+    };
+
+    return await ActivityLogger.logActivity({
+      type: "brand",
+      activity: activities[action],
+      user,
+      description: descriptions[action],
+      relatedId: brand._id,
+      relatedModel: "Brand",
+      metadata: {
+        brandName: brand.name,
+        brandSlug: brand.slug,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== SUBCATEGORY ACTIVITIES ====================
+  static async logSubCategoryActivity(action, subCategory, user, additionalData = {}) {
+    const activities = {
+      create: "SubCategory Created",
+      update: "SubCategory Updated",
+      delete: "SubCategory Deleted",
+    };
+
+    const descriptions = {
+      create: `New subcategory "${subCategory.name}" created`,
+      update: `SubCategory "${subCategory.name}" updated${
+        additionalData.changes ? ` - ${additionalData.changes}` : ""
+      }`,
+      delete: `SubCategory "${subCategory.name}" deleted`,
+    };
+
+    return await ActivityLogger.logActivity({
+      type: "subcategory",
+      activity: activities[action],
+      user,
+      description: descriptions[action],
+      relatedId: subCategory._id,
+      relatedModel: "SubCategory",
+      metadata: {
+        subCategoryName: subCategory.name,
+        subCategorySlug: subCategory.slug,
+        parentCategory: subCategory.category,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== REVIEW ACTIVITIES ====================
+  static async logReviewActivity(action, review, user, additionalData = {}) {
+    const activities = {
+      create: "Review Added",
+      update: "Review Updated",
+      delete: "Review Deleted",
+    };
+
+    const descriptions = {
+      create: `New review added for product "${additionalData.productTitle}" - Rating: ${review.rating}/5`,
+      update: `Review updated for product "${additionalData.productTitle}" - Rating: ${review.rating}/5`,
+      delete: `Review deleted for product "${additionalData.productTitle}"`,
+    };
+
+    return await ActivityLogger.logActivity({
+      type: "review",
+      activity: activities[action],
+      user,
+      description: descriptions[action],
+      relatedId: review._id,
+      relatedModel: "Review",
+      metadata: {
+        reviewRating: review.rating,
+        productId: review.product,
+        productTitle: additionalData.productTitle,
+        userId: review.user,
+        userName: additionalData.userName,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== COUPON ACTIVITIES ====================
+  static async logCouponActivity(action, coupon, user, additionalData = {}) {
+    const activities = {
+      create: "Coupon Created",
+      update: "Coupon Updated",
+      delete: "Coupon Deleted",
+    };
+
+    const descriptions = {
+      create: `New coupon "${coupon.name}" created - Discount: ${coupon.discount}%${
+        additionalData.usageLimit ? ` (Limit: ${additionalData.usageLimit})` : ""
+      }`,
+      update: `Coupon "${coupon.name}" updated${
+        additionalData.changes ? ` - ${additionalData.changes}` : ""
+      }`,
+      delete: `Coupon "${coupon.name}" deleted`,
+    };
+
+    return await ActivityLogger.logActivity({
+      type: "coupon",
+      activity: activities[action],
+      user,
+      description: descriptions[action],
+      amount: coupon.discount || null,
+      relatedId: coupon._id,
+      relatedModel: "Coupon",
+      metadata: {
+        couponName: coupon.name,
+        couponCode: coupon.code,
+        discount: coupon.discount,
+        expires: coupon.expire,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== CART ACTIVITIES ====================
+  static async logCartActivity(action, cart, user, additionalData = {}) {
+    const activities = {
+      update: "Cart Updated",
+      clear: "Cart Cleared",
+      applyCoupon: "Coupon Applied",
+    };
+
+    const descriptions = {
+      update: `Cart updated - Items: ${cart.cartItems?.length || 0}, Total: ${cart.totalCartPrice} DZD`,
+      clear: `Cart cleared`,
+      applyCoupon: `Coupon "${additionalData.couponName}" applied - Discount: ${additionalData.discount}%`,
+    };
+
+    return await ActivityLogger.logActivity({
+      type: "cart",
+      activity: activities[action],
+      user,
+      description: descriptions[action],
+      amount: cart.totalCartPrice || null,
+      relatedId: cart._id,
+      relatedModel: "Cart",
+      metadata: {
+        cartItemsCount: cart.cartItems?.length || 0,
+        totalPrice: cart.totalCartPrice,
+        totalAfterDiscount: cart.totalPriceAfterDiscount,
+        couponApplied: additionalData.couponName || null,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== WISHLIST ACTIVITIES ====================
+  static async logWishlistActivity(action, wishlist, user, additionalData = {}) {
+    const description = `Wishlist updated - ${additionalData.productName}${
+      action === "add" ? " added to" : " removed from"
+    } wishlist`;
+
+    return await ActivityLogger.logActivity({
+      type: "cart",
+      activity: "Wishlist Updated",
+      user,
+      description,
+      relatedId: wishlist._id,
+      relatedModel: "Wishlist",
+      metadata: {
+        action: action,
+        productId: additionalData.productId,
+        productName: additionalData.productName,
+        totalItems: additionalData.totalItems,
+        ...additionalData,
+      },
+    });
+  }
+
+  // ==================== BULK OPERATIONS ====================
+  static async logBulkDeleteActivity(model, count, ids, user, additionalData = {}) {
+    const modelTypeMap = {
+      Product: "product",
+      Category: "category",
+      Brand: "brand",
+      User: "user",
+      SubCategory: "subcategory",
+    };
+
+    return await ActivityLogger.logActivity({
+      type: modelTypeMap[model] || "product",
+      activity: `${model}s Bulk Deleted`,
+      user,
+      description: `${count} ${model.toLowerCase()}(s) deleted in bulk operation`,
+      relatedId: user._id,
+      relatedModel: model,
+      metadata: {
+        bulkOperation: true,
+        totalDeleted: count,
+        itemsDeleted: ids,
+        ...additionalData,
+      },
+    });
+  }
+
+  static async logBulkActivateActivity(count, ids, user, additionalData = {}) {
+    return await ActivityLogger.logActivity({
+      type: "user",
+      activity: "Users Activated",
+      user,
+      description: `${count} user(s) activated in bulk operation`,
+      relatedId: user._id,
+      relatedModel: "User",
+      metadata: {
+        bulkOperation: true,
+        totalActivated: count,
+        usersActivated: ids,
+        ...additionalData,
+      },
+    });
+  }
+
+  static async logBulkDeactivateActivity(count, ids, user, additionalData = {}) {
+    return await ActivityLogger.logActivity({
+      type: "user",
+      activity: "Users Deactivated",
+      user,
+      description: `${count} user(s) deactivated in bulk operation`,
+      relatedId: user._id,
+      relatedModel: "User",
+      metadata: {
+        bulkOperation: true,
+        totalDeactivated: count,
+        usersDeactivated: ids,
         ...additionalData,
       },
     });

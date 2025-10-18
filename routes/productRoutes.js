@@ -17,7 +17,7 @@ const {
   deleteProductValidator,
   deleteManyProductsValidator,
 } = require("../utils/validators/productValidators");
-const { protectRoute, allowTo } = require("../services/authServices");
+const { protectRoute, allowTo, optionalAuth } = require("../services/authServices");
 const reviewRoutes = require("./reviewRoutes");
 
 const handleNullValues = (req, res, next) => {
@@ -40,13 +40,13 @@ router.use("/:productId/reviews", reviewRoutes);
 router
   .route("/")
   .get(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    optionalAuth,
+        allowTo("user", "admin", "visitor"),
     getAllProducts
   )
   .post(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("admin"),
     uploadProductImages,
     resizeProductImages,
     createProductValidator,
@@ -54,8 +54,8 @@ router
   );
 
 router.route("/bulk-delete").post(
-  // protectRoute,
-  // allowTo("user", "admin"),
+  protectRoute,
+  allowTo("admin"),
   deleteManyProductsValidator,
   deleteManyProducts
 );
@@ -63,14 +63,14 @@ router.route("/bulk-delete").post(
 router
   .route("/:id")
   .get(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    optionalAuth,
+    allowTo("user", "admin", "visitor"),
     getOneProductValidator,
     getOneProduct
   )
   .put(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("admin"),
     uploadProductImages,
     resizeProductImages,
     handleNullValues,
@@ -78,8 +78,8 @@ router
     updateProduct
   )
   .delete(
-    // protectRoute,
-    // allowTo("user", "admin"),
+    protectRoute,
+    allowTo("admin"),
     deleteProductValidator,
     deleteProduct
   );

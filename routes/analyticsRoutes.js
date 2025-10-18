@@ -11,13 +11,13 @@ const {
 } = require("../controllers/analyticsController");
 
 // Assuming you have auth middleware
-// const { protect, allowedTo } = require("../middlewares/authMiddleware");
+const authService = require("../services/authServices");
 
 const router = express.Router();
 
 // Apply authentication and authorization middleware to all routes
-// router.use(protect);
-// router.use(allowedTo("admin"));
+router.use(authService.protectRoute);
+router.use(authService.allowTo("admin"));
 
 /**
  * Complete dashboard data (cards + tables)

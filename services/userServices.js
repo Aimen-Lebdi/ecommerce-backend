@@ -3,17 +3,15 @@ const User = require("../models/userModel");
 const expressAsyncHandler = require("express-async-handler");
 const userModel = require("../models/userModel");
 const endpointError = require("../utils/endpointError");
-const bcrypt= require("bcryptjs")
+const bcrypt = require("bcryptjs");
 const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const sharp = require("sharp");
 const { v4: uuidv4 } = require("uuid");
-// const { act } = require("react");
+const ActivityLogger = require("../socket/activityLogger");
 
-
-const uploadUserImage = uploadSingleImage('image');
+const uploadUserImage = uploadSingleImage("image");
 
 const resizeUserImage = expressAsyncHandler(async (req, res, next) => {
-  //1- Image processing for image
   if (req.file) {
     const imageFileName = `user-${uuidv4()}-${Date.now()}.jpeg`;
     await sharp(req.file.buffer)
@@ -22,20 +20,15 @@ const resizeUserImage = expressAsyncHandler(async (req, res, next) => {
       .jpeg({ quality: 95 })
       .toFile(`uploads/users/${imageFileName}`);
 
-    // Save image into our db
     req.body.image = imageFileName;
   }
   next();
 });
 
-//Admin
-
 const createUser = factory.createOne(User);
-const getAllUsers = factory.getAll(User ,["name"]);
+const getAllUsers = factory.getAll(User, ["name"]);
 const getOneUser = factory.getOne(User);
 const updateUser = expressAsyncHandler(async (req, res, next) => {
-
-  
   const updatedUser = await User.findByIdAndUpdate(
     req.params.id,
     {
@@ -49,12 +42,22 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
     },
     { new: true }
   );
+
   if (!updatedUser) {
-    new endpointError(`there is no user with this ID format`, 404);
+    return next(new endpointError(`there is no user with this ID format`, 404));
   }
+
+  // Log activity
+  if (req.user) {
+    const originalUser = await User.findById(req.params.id);
+    await ActivityLogger.logUserActivity("update", updatedUser, req.user, {
+      changes: `User profile updated by admin`,
+    });
+  }
+
   res.status(200).json({ data: updatedUser });
-  next();
 });
+
 const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
   const updatedUserPassword = await User.findByIdAndUpdate(
     req.params.id,
@@ -64,100 +67,142 @@ const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
     },
     { new: true }
   );
+
   if (!updatedUserPassword) {
-    new endpointError(`there is no user with this ID format`, 404);
+    return next(new endpointError(`there is no user with this ID format`, 404));
   }
+
+  // Log activity
+  if (req.user) {
+    await ActivityLogger.logUserActivity(
+      "passwordChange",
+      updatedUserPassword,
+      req.user
+    );
+  }
+
   res.status(200).json({ data: updatedUserPassword });
 });
+
 const deleteUser = expressAsyncHandler(async (req, res, next) => {
-  // Instead of deleting, set active to false
+  const userToDeactivate = await User.findById(req.params.id);
+
+  if (!userToDeactivate) {
+    return next(new endpointError(`There is no user with this ID`, 404));
+  }
+
   const deactivatedUser = await User.findByIdAndUpdate(
     req.params.id,
     { active: false },
     { new: true }
   );
-  
-  if (!deactivatedUser) {
-    return next(new endpointError(`There is no user with this ID`, 404));
-  }
-  
-  res.status(200).json({ 
-    status: 'Success',
-    message: 'User deactivated successfully',
-    data: deactivatedUser 
-  });
-});
-const deleteManyUsers = expressAsyncHandler(async (req, res, next) => {
-  const { ids } = req.body;
-  
-  if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    return next(new endpointError('Please provide an array of user IDs', 400));
+
+  // Log activity
+  if (req.user) {
+    await ActivityLogger.logUserActivity("delete", deactivatedUser, req.user);
   }
 
-  // Instead of deleting, set active to false for all users
+  res.status(200).json({
+    status: "Success",
+    message: "User deactivated successfully",
+    data: deactivatedUser,
+  });
+});
+
+const deleteManyUsers = expressAsyncHandler(async (req, res, next) => {
+  const { ids } = req.body;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return next(new endpointError("Please provide an array of user IDs", 400));
+  }
+
   const result = await User.updateMany(
     { _id: { $in: ids } },
     { active: false }
   );
 
+  // Log activity
+  if (req.user) {
+    await ActivityLogger.logBulkDeactivateActivity(
+      result.modifiedCount,
+      ids,
+      req.user
+    );
+  }
+
   res.status(200).json({
-    status: 'Success',
+    status: "Success",
     message: `${result.modifiedCount} user(s) deactivated successfully`,
     data: {
       modifiedCount: result.modifiedCount,
-      matchedCount: result.matchedCount
-    }
+      matchedCount: result.matchedCount,
+    },
   });
 });
+
 const activateUser = expressAsyncHandler(async (req, res, next) => {
+  const userToActivate = await User.findById(req.params.id);
+
+  if (!userToActivate) {
+    return next(new endpointError(`There is no user with this ID`, 404));
+  }
+
   const activatedUser = await User.findByIdAndUpdate(
     req.params.id,
     { active: true },
     { new: true }
   );
-  
-  if (!activatedUser) {
-    return next(new endpointError(`There is no user with this ID`, 404));
-  }
-  
-  res.status(200).json({ 
-    status: 'Success',
-    message: 'User activated successfully',
-    data: activatedUser 
-  });
-});
-const activateManyUsers = expressAsyncHandler(async (req, res, next) => {
-  const { ids } = req.body;
-  
-  if (!ids || !Array.isArray(ids) || ids.length === 0) {
-    return next(new endpointError('Please provide an array of user IDs', 400));
+
+  // Log activity
+  if (req.user) {
+    await ActivityLogger.logUserActivity("activate", activatedUser, req.user);
   }
 
-  // Set active to true for all specified users
+  res.status(200).json({
+    status: "Success",
+    message: "User activated successfully",
+    data: activatedUser,
+  });
+});
+
+const activateManyUsers = expressAsyncHandler(async (req, res, next) => {
+  const { ids } = req.body;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return next(new endpointError("Please provide an array of user IDs", 400));
+  }
+
   const result = await User.updateMany(
     { _id: { $in: ids } },
     { active: true }
   );
 
+  // Log activity
+  if (req.user) {
+    await ActivityLogger.logBulkActivateActivity(
+      result.modifiedCount,
+      ids,
+      req.user
+    );
+  }
+
   res.status(200).json({
-    status: 'Success',
+    status: "Success",
     message: `${result.modifiedCount} user(s) activated successfully`,
     data: {
       modifiedCount: result.modifiedCount,
-      matchedCount: result.matchedCount
-    }
+      matchedCount: result.matchedCount,
+    },
   });
 });
 
-//User
-
+// User endpoints
 const getLoggedUserData = expressAsyncHandler(async (req, res, next) => {
   req.params.id = req.user._id;
   next();
 });
 
 const updateLoggedUserPassword = expressAsyncHandler(async (req, res, next) => {
-  // 1) Update user password based user payload (req.user._id)
   const user = await User.findByIdAndUpdate(
     req.user._id,
     {
@@ -169,7 +214,6 @@ const updateLoggedUserPassword = expressAsyncHandler(async (req, res, next) => {
     }
   );
 
-  // 2) Generate token
   const token = createToken(user._id);
 
   res.status(200).json({ data: user, token });
@@ -180,7 +224,6 @@ const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {
     req.user._id,
     {
       name: req.body.name,
-      // email: req.body.email,
       image: req.body.image,
     },
     { new: true }
@@ -190,9 +233,19 @@ const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {
 });
 
 const deleteLoggedUserData = expressAsyncHandler(async (req, res, next) => {
-  await userModel.findByIdAndUpdate(req.user._id, { active: false });
+  const deactivatedUser = await userModel.findByIdAndUpdate(req.user._id, {
+    active: false,
+  });
 
-  res.status(204).json({ status: 'Success' });
+  // Log activity - user deactivated their own account
+  if (req.user) {
+    await ActivityLogger.logUserActivity("delete", deactivatedUser, req.user, {
+      selfDeactivation: true,
+      reason: "User deactivated their own account",
+    });
+  }
+
+  res.status(204).json({ status: "Success" });
 });
 
 module.exports = {
@@ -210,5 +263,5 @@ module.exports = {
   updateLoggedUserData,
   deleteLoggedUserData,
   uploadUserImage,
-  resizeUserImage
+  resizeUserImage,
 };

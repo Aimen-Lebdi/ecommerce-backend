@@ -29,7 +29,7 @@ router.post("/delivery/webhook", deliveryWebhook);
 router.get(
   "/session/:sessionId",
   authService.protectRoute,
-  authService.allowTo("user"),
+  authService.allowTo("user"," admin"),
   getOrderBySession
 );
 
@@ -37,7 +37,7 @@ router.get(
 router.post(
   "/checkout-session/:cartId",
   authService.protectRoute,
-  authService.allowTo("user"),
+  authService.allowTo("user", "admin"),
   checkoutSession
 );
 
@@ -50,7 +50,15 @@ router.post(
 );
 
 // Get all orders
-router.get("/", findAllOrders);
+router.get("/", authService.protectRoute,
+  authService.allowTo("user", "admin"),
+  findAllOrders);
+
+// Get all orders for specific user
+router.get("/myOrders", authService.protectRoute,
+  authService.allowTo("user", "admin"),
+  filterOrderForLoggedUser,
+  findAllOrders);
 
 // Get specific order
 router.get(

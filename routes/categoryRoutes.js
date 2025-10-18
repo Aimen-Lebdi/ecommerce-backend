@@ -59,7 +59,7 @@ router
   .route("/:id")
   .get(
     protectRoute,
-    allowTo("user", "admin"),
+    allowTo("admin"),
     getOneCategoryValidator,
     getOneCategory
   )

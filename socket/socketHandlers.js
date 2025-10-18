@@ -6,13 +6,29 @@ class SocketHandlers {
 
   // Handle activity-related events
   handleActivityEvents(socket) {
-    // When admin joins dashboard, send recent activities
+    // FIXED: Separate handler for join_dashboard - only send activities after joining
     socket.on("join_dashboard", async () => {
-      if (socket.user.role === "admin") {
-        try {
+      if (socket.user.role !== "admin") {
+        socket.emit("dashboard_error", {
+          message: "Access denied: Admin role required",
+        });
+        return;
+      }
+
+      try {
+        // Join the dashboard room first
+        socket.join("dashboard");
+        console.log(`📊 Admin ${socket.user.name} joined dashboard room`);
+        
+        // Emit join confirmation
+        socket.emit("dashboard_joined", {
+          message: "Successfully joined dashboard",
+        });
+
+        // THEN send initial activities (only if not already sent)
+        if (!socket.hasReceivedInitialActivities) {
           const ActivityLog = require("../models/activityLogModel");
 
-          // Get last 20 activities for initial load
           const recentActivities = await ActivityLog.find({})
             .sort({ createdAt: -1 })
             .limit(20)
@@ -26,19 +42,20 @@ class SocketHandlers {
               createdAt: 1,
             });
 
-          // Send initial activities to the admin
+          socket.hasReceivedInitialActivities = true;
+
           socket.emit("initial_activities", {
             activities: recentActivities,
             timestamp: new Date(),
           });
 
-          console.log(`Admin ${socket.user.name} received initial activities`);
-        } catch (error) {
-          console.error("Error fetching initial activities:", error);
-          socket.emit("activity_error", {
-            message: "Failed to load activities",
-          });
+          console.log(`✅ Admin ${socket.user.name} received ${recentActivities.length} initial activities`);
         }
+      } catch (error) {
+        console.error("Error in join_dashboard:", error);
+        socket.emit("activity_error", {
+          message: "Failed to join dashboard or load activities",
+        });
       }
     });
 
@@ -97,6 +114,8 @@ class SocketHandlers {
             filters: filters,
             timestamp: new Date(),
           });
+
+          console.log(`🔍 Filtered ${filteredActivities.length} activities for ${socket.user.name}`);
         } catch (error) {
           console.error("Error filtering activities:", error);
           socket.emit("activity_error", {
@@ -140,10 +159,67 @@ class SocketHandlers {
             timeframe: "24h",
             timestamp: new Date(),
           });
+
+          console.log(`📊 Sent activity stats to ${socket.user.name}`);
         } catch (error) {
           console.error("Error getting activity stats:", error);
           socket.emit("activity_error", { message: "Failed to get stats" });
         }
+      }
+    });
+
+    // FIXED: Explicit handler for requesting initial activities
+    socket.on("request_initial_activities", async () => {
+      if (socket.user.role !== "admin") {
+        socket.emit("activity_error", {
+          message: "Access denied: Admin role required",
+        });
+        return;
+      }
+
+      // Check if user is in dashboard room
+      const rooms = Array.from(socket.rooms);
+      if (!rooms.includes("dashboard")) {
+        socket.emit("activity_error", {
+          message: "Please join dashboard first",
+        });
+        return;
+      }
+
+      try {
+        if (socket.hasReceivedInitialActivities) {
+          console.log(`⏭️ Admin ${socket.user.name} already received initial activities`);
+          return;
+        }
+
+        const ActivityLog = require("../models/activityLogModel");
+
+        const recentActivities = await ActivityLog.find({})
+          .sort({ createdAt: -1 })
+          .limit(20)
+          .select({
+            type: 1,
+            activity: 1,
+            user: 1,
+            description: 1,
+            status: 1,
+            amount: 1,
+            createdAt: 1,
+          });
+
+        socket.hasReceivedInitialActivities = true;
+
+        socket.emit("initial_activities", {
+          activities: recentActivities,
+          timestamp: new Date(),
+        });
+
+        console.log(`✅ Admin ${socket.user.name} received ${recentActivities.length} initial activities`);
+      } catch (error) {
+        console.error("Error fetching initial activities:", error);
+        socket.emit("activity_error", {
+          message: "Failed to load activities",
+        });
       }
     });
   }
@@ -173,6 +249,8 @@ class SocketHandlers {
           activities: userActivities,
           timestamp: new Date(),
         });
+
+        console.log(`📝 Sent ${userActivities.length} activities to ${socket.user.name}`);
       } catch (error) {
         console.error("Error getting user activities:", error);
         socket.emit("activity_error", {

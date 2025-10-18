@@ -18,6 +18,7 @@ const { webhookCheckout } = require("./services/orderServices");
 // Socket.IO imports
 const SocketConfig = require("./socket/socketConfig");
 const socketEmitter = require("./utils/socketEmitter");
+const cookieParser = require("cookie-parser");
 
 connectdb();
 
@@ -30,17 +31,21 @@ const server = http.createServer(app);
 const socketConfig = new SocketConfig(server);
 socketEmitter.setSocket(socketConfig);
 
-// Enable other domains to access your application
-app.use(cors());
+// REMOVE THIS LINE - it's causing the CORS issue
+// app.use(cors());
 
 const allowedOrigins = [
   "http://localhost:5173", // local Vite frontend
 ];
 
+// KEEP ONLY THIS CORS CONFIGURATION
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow requests with no origin (like mobile apps or Postman)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -59,6 +64,9 @@ app.post(
   express.raw({ type: "application/json" }),
   webhookCheckout
 );
+
+app.use(cookieParser());
+
 
 // Middlewares
 app.use(express.json({ limit: "20kb" }));

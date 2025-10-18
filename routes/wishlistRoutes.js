@@ -12,7 +12,9 @@ const router = express.Router();
 
 router.use(authService.protectRoute, authService.allowTo("user", "admin"));
 
-router.route("/").post(addProductToWishlist).get(getLoggedUserWishlist);
+router.route("/")
+.post(addProductToWishlist)
+.get(getLoggedUserWishlist);
 
 router.delete("/:productId", removeProductFromWishlist);
 
