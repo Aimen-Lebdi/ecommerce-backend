@@ -1,0 +1,15 @@
+# Backend .dockerignore
+# Location: backend/.dockerignore
+
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+README.md
+.vscode
+.idea
+*.md
+.DS_Store
+uploads/*
+!uploads/.gitkeep

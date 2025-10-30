@@ -34,9 +34,13 @@ socketEmitter.setSocket(socketConfig);
 // REMOVE THIS LINE - it's causing the CORS issue
 // app.use(cors());
 
-const allowedOrigins = [
-  "http://localhost:5173", // local Vite frontend
-];
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',')
+  : [
+      "http://localhost:5173", // local Vite frontend
+      "http://localhost",      // Docker frontend
+      "http://localhost:80",   // Docker frontend explicit port
+    ];
 
 // KEEP ONLY THIS CORS CONFIGURATION
 app.use(
