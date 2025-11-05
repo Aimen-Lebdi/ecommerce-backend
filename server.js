@@ -7,7 +7,38 @@ const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
 const dotenv = require("dotenv");
 const http = require("http");
-dotenv.config();
+
+// ====================================
+// FIX: Load correct environment file
+// ====================================
+const envFile = process.env.NODE_ENV === "production" 
+  ? ".env.production" 
+  : ".env.development";
+
+dotenv.config({ path: path.resolve(__dirname, envFile) });
+
+// Verify critical environment variables
+console.log("🔧 Environment Configuration:");
+console.log(`📝 Environment: ${process.env.NODE_ENV || "development"}`);
+console.log(`📄 Loading from: ${envFile}`);
+console.log(`✅ PORT: ${process.env.PORT}`);
+console.log(`✅ MONGO_DB_URI: ${process.env.MONGO_DB_URI ? "Loaded" : "Missing"}`);
+console.log(`✅ STRIPE_SECRET: ${process.env.STRIPE_SECRET ? "Loaded (length: " + process.env.STRIPE_SECRET.length + ")" : "Missing"}`);
+
+// Exit if critical variables are missing
+if (!process.env.STRIPE_SECRET) {
+  console.error("❌ CRITICAL: STRIPE_SECRET is not defined!");
+  console.error(`   Check if ${envFile} exists and contains STRIPE_SECRET`);
+  process.exit(1);
+}
+
+if (!process.env.MONGO_DB_URI) {
+  console.error("❌ CRITICAL: MONGO_DB_URI is not defined!");
+  process.exit(1);
+}
+
+console.log("✅ All critical environment variables loaded successfully\n");
+// ====================================
 
 const connectdb = require("./config/connectdb");
 const globalErrorMiddleware = require("./middlewares/globalErrorMiddlewares");
@@ -31,9 +62,6 @@ const server = http.createServer(app);
 const socketConfig = new SocketConfig(server);
 socketEmitter.setSocket(socketConfig);
 
-// REMOVE THIS LINE - it's causing the CORS issue
-// app.use(cors());
-
 const allowedOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',')
   : [
@@ -42,7 +70,7 @@ const allowedOrigins = process.env.CORS_ORIGIN
       "http://localhost:80",   // Docker frontend explicit port
     ];
 
-// KEEP ONLY THIS CORS CONFIGURATION
+// CORS configuration
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -70,7 +98,6 @@ app.post(
 );
 
 app.use(cookieParser());
-
 
 // Middlewares
 app.use(express.json({ limit: "20kb" }));
@@ -117,8 +144,10 @@ const PORT = process.env.PORT || 5000;
 
 // Use the HTTP server instead of app.listen
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Socket.IO server is ready`);
+  console.log(`\n🚀 Server is running on port ${PORT}`);
+  console.log(`🔌 Socket.IO server is ready`);
+  console.log(`📡 Base URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}`);
+  console.log(`🌍 CORS Origins: ${allowedOrigins.join(", ")}\n`);
 });
 
 process.on("unhandledRejection", (err) => {

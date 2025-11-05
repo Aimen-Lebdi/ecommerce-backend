@@ -1,24 +1,21 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const asyncHandler = require("express-async-handler");
-const factory = require("./handlersFactory");
+const { getAll, getOne } = require("./handlersFactory");
 const ApiError = require("../utils/endpointError");
-const axios = require("axios");
-const ActivityLogger = require("../socket/activityLogger");
+const { post } = require("axios");
+const { logOrderActivity } = require("../socket/activityLogger");
 
-const User = require("../models/userModel");
-const Product = require("../models/productModel");
-const Cart = require("../models/cartModel");
+const { findOne } = require("../models/userModel");
+const { bulkWrite } = require("../models/productModel");
+const { findById, findByIdAndDelete } = require("../models/cartModel");
 const Order = require("../models/orderModel");
-const DeliveryService = require("./deliveryService");
-const InvoiceService = require("./invoiceService");
+const { createShipment, getTrackingInfo, updateOrderStatus } = require("./deliveryService");
+const { generateInvoice } = require("./invoiceService");
 
-// @desc    Create cash order
-// @route   POST /api/v1/orders/cartId
-// @access  Protected/User
-exports.createCashOrder = asyncHandler(async (req, res, next) => {
+const createCashOrder = asyncHandler(async (req, res, next) => {
   const shippingPrice = 500;
 
-  const cart = await Cart.findById(req.params.cartId);
+  const cart = await findById(req.params.cartId);
   if (!cart) {
     return next(
       new ApiError(`There is no such cart with id ${req.params.cartId}`, 404)
@@ -31,7 +28,7 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
 
   const totalOrderPrice = cartPrice + shippingPrice;
 
-  const order = await Order.create({
+  const order = await create({
     user: req.user._id,
     cartItems: cart.cartItems,
     shippingAddress: req.body.shippingAddress,
@@ -51,7 +48,7 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (order && req.user) {
-    await ActivityLogger.logOrderActivity("create", order, req.user, {
+    await logOrderActivity("create", order, req.user, {
       paymentMethod: "cash",
       itemsCount: cart.cartItems.length,
     });
@@ -64,8 +61,8 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
         update: { $inc: { quantity: -item.quantity, sold: +item.quantity } },
       },
     }));
-    await Product.bulkWrite(bulkOption, {});
-    await Cart.findByIdAndDelete(req.params.cartId);
+    await bulkWrite(bulkOption, {});
+    await findByIdAndDelete(req.params.cartId);
   }
 
   res.status(201).json({
@@ -77,7 +74,7 @@ exports.createCashOrder = asyncHandler(async (req, res, next) => {
 
 const handlePaymentCaptured = async (charge) => {
   try {
-    const order = await Order.findOne({
+    const order = await _findOne({
       totalOrderPrice: charge.amount / 100,
       paymentMethodType: "card",
       paymentStatus: "authorized",
@@ -103,7 +100,7 @@ const handlePaymentCaptured = async (charge) => {
 
 const handlePaymentRefunded = async (charge) => {
   try {
-    const order = await Order.findOne({
+    const order = await _findOne({
       totalOrderPrice: charge.amount / 100,
       paymentMethodType: "card",
     }).sort({ createdAt: -1 });
@@ -125,17 +122,17 @@ const handlePaymentRefunded = async (charge) => {
   }
 };
 
-exports.filterOrderForLoggedUser = asyncHandler(async (req, res, next) => {
+const filterOrderForLoggedUser = asyncHandler(async (req, res, next) => {
   // Everyone (admin or user) sees only their own orders
   req.filterObj = { user: req.user._id };
   next();
 });
 
-exports.findAllOrders = factory.getAll(Order);
-exports.findSpecificOrder = factory.getOne(Order);
+const findAllOrders = getAll(Order);
+const findSpecificOrder = getOne(Order);
 
-exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+const updateOrderToPaid = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id);
   if (!order) {
     return next(
       new ApiError(
@@ -151,7 +148,7 @@ exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (req.user) {
-    await ActivityLogger.logOrderActivity("update", updatedOrder, req.user, {
+    await logOrderActivity("update", updatedOrder, req.user, {
       changes: "payment status marked as paid",
     });
   }
@@ -159,8 +156,8 @@ exports.updateOrderToPaid = asyncHandler(async (req, res, next) => {
   res.status(200).json({ status: "success", data: updatedOrder });
 });
 
-exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+const updateOrderToDelivered = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id);
   if (!order) {
     return next(
       new ApiError(
@@ -177,16 +174,16 @@ exports.updateOrderToDelivered = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (req.user) {
-    await ActivityLogger.logOrderActivity("deliver", updatedOrder, req.user);
+    await logOrderActivity("deliver", updatedOrder, req.user);
   }
 
   res.status(200).json({ status: "success", data: updatedOrder });
 });
 
-exports.checkoutSession = asyncHandler(async (req, res, next) => {
+const checkoutSession = asyncHandler(async (req, res, next) => {
   const shippingPrice = 500;
 
-  const cart = await Cart.findById(req.params.cartId);
+  const cart = await findById(req.params.cartId);
   if (!cart) {
     return next(
       new ApiError(`There is no such cart with id ${req.params.cartId}`, 404)
@@ -205,7 +202,7 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
     dayra: req.body.shippingAddress?.dayra || "",
   };
 
-  const order = await Order.create({
+  const order = await create({
     user: req.user._id,
     cartItems: cart.cartItems,
     shippingAddress,
@@ -225,7 +222,7 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (order && req.user) {
-    await ActivityLogger.logOrderActivity("create", order, req.user, {
+    await logOrderActivity("create", order, req.user, {
       paymentMethod: "card",
       itemsCount: cart.cartItems.length,
     });
@@ -237,8 +234,8 @@ exports.checkoutSession = asyncHandler(async (req, res, next) => {
       update: { $inc: { quantity: -item.quantity, sold: +item.quantity } },
     },
   }));
-  await Product.bulkWrite(bulkOption, {});
-  await Cart.findByIdAndDelete(req.params.cartId);
+  await bulkWrite(bulkOption, {});
+  await findByIdAndDelete(req.params.cartId);
 
   const session = await stripe.checkout.sessions.create({
     line_items: [
@@ -277,15 +274,15 @@ const createCardOrder = async (session) => {
     dayra: session.metadata.shippingDayra,
   };
 
-  const cart = await Cart.findById(cartId);
-  const user = await User.findOne({ email: session.customer_email });
+  const cart = await findById(cartId);
+  const user = await findOne({ email: session.customer_email });
 
   if (!cart || !user) {
     console.error("Cart or user not found for session:", session.id);
     return;
   }
 
-  const order = await Order.create({
+  const order = await create({
     user: user._id,
     cartItems: cart.cartItems,
     shippingAddress,
@@ -311,16 +308,16 @@ const createCardOrder = async (session) => {
         update: { $inc: { quantity: -item.quantity, sold: +item.quantity } },
       },
     }));
-    await Product.bulkWrite(bulkOption, {});
-    await Cart.findByIdAndDelete(cartId);
+    await bulkWrite(bulkOption, {});
+    await findByIdAndDelete(cartId);
   }
 
   console.log(`✔️ Order created: ${order._id} for session: ${session.id}`);
   return order;
 };
 
-exports.getOrderBySession = asyncHandler(async (req, res, next) => {
-  const order = await Order.findOne({
+const getOrderBySession = asyncHandler(async (req, res, next) => {
+  const order = await _findOne({
     stripeSessionId: req.params.sessionId,
     user: req.user._id,
   });
@@ -335,7 +332,7 @@ exports.getOrderBySession = asyncHandler(async (req, res, next) => {
   });
 });
 
-exports.webhookCheckout = asyncHandler(async (req, res, next) => {
+const webhookCheckout = asyncHandler(async (req, res, next) => {
   const sig = req.headers["stripe-signature"];
 
   let event;
@@ -374,8 +371,8 @@ exports.webhookCheckout = asyncHandler(async (req, res, next) => {
   res.status(200).json({ received: true });
 });
 
-exports.confirmOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+const confirmOrder = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id);
 
   if (!order) {
     return next(
@@ -400,7 +397,7 @@ exports.confirmOrder = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (req.user) {
-    await ActivityLogger.logOrderActivity("confirm", order, req.user);
+    await logOrderActivity("confirm", order, req.user);
   }
 
   res.status(200).json({
@@ -410,14 +407,14 @@ exports.confirmOrder = asyncHandler(async (req, res, next) => {
   });
 });
 
-exports.shipOrder = asyncHandler(async (req, res, next) => {
+const shipOrder = asyncHandler(async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id);
-    const result = await DeliveryService.createShipment(req.params.id);
+    const order = await _findById(req.params.id);
+    const result = await createShipment(req.params.id);
 
     // Log activity
     if (req.user && order) {
-      await ActivityLogger.logOrderActivity("ship", order, req.user, {
+      await logOrderActivity("ship", order, req.user, {
         trackingNumber: result.trackingNumber || "pending",
       });
     }
@@ -431,8 +428,8 @@ exports.shipOrder = asyncHandler(async (req, res, next) => {
   }
 });
 
-exports.getOrderTracking = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id).populate(
+const getOrderTracking = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id).populate(
     "user",
     "name email"
   );
@@ -446,7 +443,7 @@ exports.getOrderTracking = asyncHandler(async (req, res, next) => {
   let trackingInfo = null;
   if (order.trackingNumber) {
     try {
-      trackingInfo = await DeliveryService.getTrackingInfo(
+      trackingInfo = await getTrackingInfo(
         order.trackingNumber
       );
     } catch (error) {
@@ -472,14 +469,14 @@ exports.getOrderTracking = asyncHandler(async (req, res, next) => {
   });
 });
 
-exports.deliveryWebhook = asyncHandler(async (req, res, next) => {
+const deliveryWebhook = asyncHandler(async (req, res, next) => {
   console.log("📦 Delivery webhook received:", req.body);
 
   const { event, data } = req.body;
 
   if (event === "parcel.status.updated") {
     try {
-      await DeliveryService.updateOrderStatus(data.order_id, {
+      await updateOrderStatus(data.order_id, {
         status: data.status,
         note: `Delivery update: ${data.status}`,
       });
@@ -496,8 +493,8 @@ exports.deliveryWebhook = asyncHandler(async (req, res, next) => {
   });
 });
 
-exports.simulateDelivery = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+const simulateDelivery = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id);
 
   if (!order || !order.trackingNumber) {
     return next(
@@ -507,7 +504,7 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
 
   const { speed, scenario } = req.body;
   try {
-    const response = await axios.post(
+    const response = await post(
       `${process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1"}/parcels/${order.trackingNumber}/simulate`,
       { speed, scenario }
     );
@@ -522,8 +519,8 @@ exports.simulateDelivery = asyncHandler(async (req, res, next) => {
   }
 });
 
-exports.cancelOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+const cancelOrder = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id);
 
   if (!order) {
     return next(
@@ -563,7 +560,7 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (req.user) {
-    await ActivityLogger.logOrderActivity("cancel", order, req.user, {
+    await logOrderActivity("cancel", order, req.user, {
       reason: req.body.reason || "No reason provided",
     });
   }
@@ -575,8 +572,8 @@ exports.cancelOrder = asyncHandler(async (req, res, next) => {
   });
 });
 
-exports.confirmCardOrder = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id);
+const confirmCardOrder = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id);
 
   if (!order) {
     return next(
@@ -611,7 +608,7 @@ exports.confirmCardOrder = asyncHandler(async (req, res, next) => {
 
   // Log activity
   if (req.user) {
-    await ActivityLogger.logOrderActivity("confirm", order, req.user);
+    await logOrderActivity("confirm", order, req.user);
   }
 
   res.status(200).json({
@@ -621,8 +618,8 @@ exports.confirmCardOrder = asyncHandler(async (req, res, next) => {
   });
 });
 
-exports.downloadInvoice = asyncHandler(async (req, res, next) => {
-  const order = await Order.findById(req.params.id)
+const downloadInvoice = asyncHandler(async (req, res, next) => {
+  const order = await _findById(req.params.id)
     .populate("user", "name email phone")
     .populate("cartItems.product", "title imageCover");
 
@@ -641,7 +638,7 @@ exports.downloadInvoice = asyncHandler(async (req, res, next) => {
     );
   }
 
-  const pdfBuffer = await InvoiceService.generateInvoice(order);
+  const pdfBuffer = await generateInvoice(order);
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
@@ -651,3 +648,24 @@ exports.downloadInvoice = asyncHandler(async (req, res, next) => {
 
   res.send(pdfBuffer);
 });
+
+
+module.exports = {
+  createCashOrder,
+  filterOrderForLoggedUser,
+  findAllOrders,
+  findSpecificOrder,
+  updateOrderToPaid,
+  updateOrderToDelivered,
+  checkoutSession,
+  getOrderBySession,
+  webhookCheckout,
+  confirmOrder,
+  shipOrder,
+  getOrderTracking,
+  deliveryWebhook,
+  simulateDelivery,
+  cancelOrder,
+  confirmCardOrder,
+  downloadInvoice
+};
