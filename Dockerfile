@@ -1,9 +1,6 @@
-# Backend Dockerfile
-# Location: backend/Dockerfile
-
+# backend/Dockerfile
 FROM node:22-alpine
 
-# Set working directory
 WORKDIR /app
 
 # Copy package files
