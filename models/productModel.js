@@ -52,7 +52,7 @@ const productSchema = new mongoose.Schema(
       },
       required: [true, "Product must have a main image"],
     },
-    images: [String],
+    images: [String], // Will store full Cloudinary URLs
     colors: [String],
     quantity: {
       type: Number,
@@ -149,8 +149,6 @@ productSchema.pre(/^find/, function (next) {
 
 // Middleware to update category product count when a product is saved
 productSchema.post("save", async function (doc) {
-  setImageURL(doc);
-
   // Update category product count
   if (doc.category) {
     const Category = mongoose.model("Category");
@@ -217,8 +215,6 @@ productSchema.pre("findOneAndUpdate", async function () {
 
 productSchema.post("findOneAndUpdate", async function (doc) {
   if (doc) {
-    setImageURL(doc);
-
     const Category = mongoose.model("Category");
     const Subcategory = mongoose.model("Subcategory");
     const Brand = mongoose.model("Brand");
@@ -270,25 +266,8 @@ productSchema.post("findOneAndUpdate", async function (doc) {
   }
 });
 
-const setImageURL = (doc) => {
-  if (doc.mainImage) {
-    const imageUrl = `${process.env.BASE_URL}/products/${doc.mainImage}`;
-    doc.mainImage = imageUrl;
-  }
-  if (doc.images) {
-    const imagesList = [];
-    doc.images.forEach((image) => {
-      const imageUrl = `${process.env.BASE_URL}/products/${image}`;
-      imagesList.push(imageUrl);
-    });
-    doc.images = imagesList;
-  }
-};
-
-// findOne, findAll and update
-productSchema.post("init", (doc) => {
-  setImageURL(doc);
-});
+// Remove all the setImageURL logic - not needed with Cloudinary!
+// Cloudinary returns full URLs, so we just store them directly
 
 const productModel = mongoose.model("Product", productSchema);
 

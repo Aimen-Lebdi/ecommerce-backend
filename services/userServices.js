@@ -5,22 +5,16 @@ const userModel = require("../models/userModel");
 const endpointError = require("../utils/endpointError");
 const bcrypt = require("bcryptjs");
 const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
-const sharp = require("sharp");
-const { v4: uuidv4 } = require("uuid");
 const ActivityLogger = require("../socket/activityLogger");
 
-const uploadUserImage = uploadSingleImage("image");
+// Upload to Cloudinary 'users' folder
+const uploadUserImage = uploadSingleImage("image", "users");
 
+// No need for sharp anymore - Cloudinary handles it!
 const resizeUserImage = expressAsyncHandler(async (req, res, next) => {
   if (req.file) {
-    const imageFileName = `user-${uuidv4()}-${Date.now()}.jpeg`;
-    await sharp(req.file.buffer)
-      .resize(600, 600)
-      .toFormat("jpeg")
-      .jpeg({ quality: 95 })
-      .toFile(`uploads/users/${imageFileName}`);
-
-    req.body.image = imageFileName;
+    // Cloudinary automatically uploads and returns the full URL
+    req.body.image = req.file.path; // This is the Cloudinary URL
   }
   next();
 });

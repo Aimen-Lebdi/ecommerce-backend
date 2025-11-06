@@ -21,7 +21,7 @@ const categorySchema = new mongoose.Schema(
       required: [true, "Product must have a slug"],
       lowercase: true,
     },
-    image: String,
+    image: String, // Will store full Cloudinary URL
     productCount: {
       type: Number,
       default: 0,
@@ -33,37 +33,8 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
-const setImageURL = (doc) => {
-  if (doc.image && !doc.image.startsWith("http")) {
-    const imageUrl = `${process.env.BASE_URL}/categories/${doc.image}`;
-    doc.image = imageUrl;
-  }
-};
-
-// findOne, findAll and update
-categorySchema.post("init", (doc) => {
-  setImageURL(doc);
-});
-
-// create
-categorySchema.post("save", (doc) => {
-  setImageURL(doc);
-});
-
-// For update operations
-categorySchema.post("findOneAndUpdate", async function (doc) {
-  if (doc) {
-    setImageURL(doc);
-  }
-});
-
-// For updateOne operations
-categorySchema.post("updateOne", async function () {
-  const doc = await this.model.findOne(this.getQuery());
-  if (doc) {
-    setImageURL(doc);
-  }
-});
+// Remove all the setImageURL logic - not needed with Cloudinary!
+// Cloudinary returns full URLs, so we just store them directly
 
 // Static method to update product count for a category
 categorySchema.statics.updateProductCount = async function (categoryId) {

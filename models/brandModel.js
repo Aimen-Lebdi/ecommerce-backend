@@ -21,7 +21,7 @@ const brandSchema = new mongoose.Schema(
       required: [true, "Brand must have a slug"],
       lowercase: true,
     },
-    image: String,
+    image: String, // Will store full Cloudinary URL
     productCount: {
       type: Number,
       default: 0,
@@ -31,21 +31,8 @@ const brandSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const setImageURL = (doc) => {
-  if (doc.image) {
-    const imageUrl = `${process.env.BASE_URL}/brands/${doc.image}`;
-    doc.image = imageUrl;
-  }
-};
-// findOne, findAll and update
-brandSchema.post("init", (doc) => {
-  setImageURL(doc);
-});
-
-// create
-brandSchema.post("save", (doc) => {
-  setImageURL(doc);
-});
+// Remove all the setImageURL logic - not needed with Cloudinary!
+// Cloudinary returns full URLs, so we just store them directly
 
 // Static method to update product count for a brand
 brandSchema.statics.updateProductCount = async function (brandId) {

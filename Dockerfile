@@ -12,9 +12,6 @@ RUN npm ci --only=production
 # Copy application files
 COPY . .
 
-# Create uploads directory
-RUN mkdir -p uploads/brands uploads/categories uploads/products uploads/subCategories uploads/users
-
 # Expose port
 EXPOSE 5000
 

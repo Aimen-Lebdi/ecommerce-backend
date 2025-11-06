@@ -1,29 +1,16 @@
-const multer = require('multer');
-const ApiError = require('../utils/endpointError');
+const { createUpload } = require('../config/cloudinary');
 
-const multerOptions = () => {
-
-  const multerStorage = multer.memoryStorage();
-
-  const multerFilter = function (req, file, cb) {
-    if (file.mimetype.startsWith('image')) {
-      cb(null, true);
-    } else {
-      cb(new ApiError('Only Images allowed', 400), false);
-    }
-  };
-
-  const upload = multer({ storage: multerStorage, fileFilter: multerFilter });
-
-  return upload;
+const uploadSingleImage = (fieldName, folder) => {
+  const upload = createUpload(folder);
+  return upload.single(fieldName);
 };
 
-const uploadSingleImage = (fieldName) => multerOptions().single(fieldName);
-
-const uploadMixOfImages = (arrayOfFields) =>
-  multerOptions().fields(arrayOfFields);
+const uploadMixOfImages = (arrayOfFields, folder) => {
+  const upload = createUpload(folder);
+  return upload.fields(arrayOfFields);
+};
 
 module.exports = {
-  uploadSingleImage: uploadSingleImage,
-  uploadMixOfImages: uploadMixOfImages
+  uploadSingleImage,
+  uploadMixOfImages
 };

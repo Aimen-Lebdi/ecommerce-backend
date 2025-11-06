@@ -1,25 +1,17 @@
 const subCategoryModel = require("../models/subCategoryModel");
-factory = require("./handlersFactory");
+const factory = require("./handlersFactory");
 const expressAsyncHandler = require("express-async-handler");
 const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
-const sharp = require("sharp");
-const { v4: uuidv4 } = require("uuid");
 
+// Upload to Cloudinary 'subcategories' folder
+const uploadSubCategoryImage = uploadSingleImage("image", "subcategories");
 
-const uploadSubCategoryImage = uploadSingleImage("image");
-
+// No need for sharp anymore - Cloudinary handles it!
 const resizeSubCategoryImage = expressAsyncHandler(async (req, res, next) => {
-  //1- Image processing for image
   if (req.file) {
-    const imageFileName = `sub-category-${uuidv4()}-${Date.now()}.jpeg`;
-    await sharp(req.file.buffer)
-      .resize(600, 600)
-      .toFormat("jpeg")
-      .jpeg({ quality: 95 })
-      .toFile(`uploads/subcategories/${imageFileName}`);
-
-    // Save image into our db
-    req.body.image = imageFileName;
+    // Cloudinary automatically uploads and returns the full URL
+    // Store the full URL in the database
+    req.body.image = req.file.path; // This is the Cloudinary URL
   }
   next();
 });
@@ -39,7 +31,7 @@ const createFilterObj = async (req, res, next) => {
 };
 
 const createSubCategory = factory.createOne(subCategoryModel);
-const getAllSubCategories = factory.getAll(subCategoryModel, ["name"] ,"category");
+const getAllSubCategories = factory.getAll(subCategoryModel, ["name"], "category");
 const getOneSubCategory = factory.getOne(subCategoryModel);
 const updateSubCategory = factory.updateOne(subCategoryModel);
 const deleteSubCategory = factory.deleteOne(subCategoryModel);

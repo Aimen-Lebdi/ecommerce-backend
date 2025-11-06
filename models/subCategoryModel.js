@@ -21,7 +21,7 @@ const subCategorySchema = new mongoose.Schema(
       required: [true, "Subcategory must have a slug"],
       lowercase: true,
     },
-    image: String,
+    image: String, // Will store full Cloudinary URL
     category: {
       type: mongoose.Schema.ObjectId,
       ref: "Category",
@@ -36,23 +36,8 @@ const subCategorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-
-
-const setImageURL = (doc) => {
-  if (doc.image) {
-    const imageUrl = `${process.env.BASE_URL}/subCategories/${doc.image}`;
-    doc.image = imageUrl;
-  }
-};
-// findOne, findAll and update
-subCategorySchema.post("init", (doc) => {
-  setImageURL(doc);
-});
-
-// create
-subCategorySchema.post("save", (doc) => {
-  setImageURL(doc);
-});
+// Remove all the setImageURL logic - not needed with Cloudinary!
+// Cloudinary returns full URLs, so we just store them directly
 
 // Static method to update product count for a subcategory
 subCategorySchema.statics.updateProductCount = async function (subCategoryId) {
