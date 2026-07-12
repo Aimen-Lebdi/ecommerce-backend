@@ -139,3 +139,6 @@ npm start      # Production mode
 - Rate limiting configured in `server.js`
 - MongoDB indexes should be added to frequently queried fields
 - Socket.IO uses polling fallback for compatibility
+
+If anything here is unclear, ask for details before making behavioral changes.
+
