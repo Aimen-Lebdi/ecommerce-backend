@@ -186,24 +186,41 @@ productSchema.post("findOneAndDelete", async function (doc) {
   }
 });
 
-productSchema.post("deleteOne", async function () {
-  const doc = this.getQuery();
-  if (doc && doc._id) {
-    const product = await this.model.findById(doc._id);
-    if (product) {
-      if (product.category) {
-        const Category = mongoose.model("Category");
-        await Category.updateProductCount(product.category);
-      }
-      if (product.subCategory) {
-        const Subcategory = mongoose.model("Subcategory");
-        await Subcategory.updateProductCount(product.subCategory);
-      }
-      if (product.brand) {
-        const Brand = mongoose.model("Brand");
-        await Brand.updateProductCount(product.brand);
-      }
-    }
+// Helper: extract a string ID from a field that may be a raw ObjectId
+// or a populated sub-document { _id: ObjectId, name: '...' }
+const toIdString = (ref) => {
+  if (!ref) return null;
+  if (typeof ref === "object" && ref._id) return ref._id.toString();
+  return ref.toString();
+};
+
+// Middleware to update product counts when multiple products are deleted at once
+productSchema.pre("deleteMany", async function () {
+  // Fetch the products that will be deleted to capture their parent references
+  // Note: the pre(/^find/) middleware populates category/subCategory/brand,
+  // so each field may be a populated object rather than a raw ObjectId.
+  const products = await this.model.find(this.getQuery()).select("category subCategory brand");
+
+  // Store unique parent IDs for the post hook to recalculate
+  this._categoriesToUpdate = [...new Set(products.map((p) => toIdString(p.category)).filter(Boolean))];
+  this._subcategoriesToUpdate = [...new Set(products.map((p) => toIdString(p.subCategory)).filter(Boolean))];
+  this._brandsToUpdate = [...new Set(products.map((p) => toIdString(p.brand)).filter(Boolean))];
+});
+
+productSchema.post("deleteMany", async function () {
+  const Category = mongoose.model("Category");
+  const Subcategory = mongoose.model("Subcategory");
+  const Brand = mongoose.model("Brand");
+
+  // Recalculate product counts for all affected parents
+  for (const catId of this._categoriesToUpdate || []) {
+    await Category.updateProductCount(catId);
+  }
+  for (const subId of this._subcategoriesToUpdate || []) {
+    await Subcategory.updateProductCount(subId);
+  }
+  for (const brandId of this._brandsToUpdate || []) {
+    await Brand.updateProductCount(brandId);
   }
 });
 
