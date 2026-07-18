@@ -29,7 +29,6 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
       name: req.body.name,
       slug: req.body.slug,
       email: req.body.email,
-      profileImg: req.body.profileImg,
       active: req.body.active,
       role: req.body.role,
       image: req.body.image,

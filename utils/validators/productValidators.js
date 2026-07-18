@@ -70,6 +70,9 @@ const createProductValidator = [
       isString: {
         errorMessage: "Main image must be a string",
       },
+      isURL: {
+        errorMessage: "Main image must be a valid URL",
+      },
       notEmpty: {
         errorMessage: "Product must have a main image",
       },
@@ -288,6 +291,9 @@ const updateProductValidator = [
       optional: true,
       isString: {
         errorMessage: "Main image must be a string",
+      },
+      isURL: {
+        errorMessage: "Main image must be a valid URL",
       },
       trim: true,
     },

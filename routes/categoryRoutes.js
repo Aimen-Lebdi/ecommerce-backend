@@ -19,14 +19,7 @@ const {
   deleteManyCategoriesValidator,
 } = require("../utils/validators/categoryValidators");
 const { protectRoute, allowTo, optionalAuth } = require("../services/authServices");
-
-const handleNullValues = (req, res, next) => {
-  // Convert '__NULL__' markers back to null for optional fields
-  if (req.body.image === "__NULL__") {
-    req.body.image = null;
-  }
-  next();
-};
+const handleNullValues = require("../middlewares/handleNullValues");
 
 router.use("/:categoryId/subcategories", subCategoryRoutes);
 
@@ -68,7 +61,7 @@ router
     allowTo("admin"),
     uploadCategoryImage,
     resizeCategoryImage,
-    handleNullValues,
+    handleNullValues("image"),
     updateCategoryValidator,
     updateCategory
   )

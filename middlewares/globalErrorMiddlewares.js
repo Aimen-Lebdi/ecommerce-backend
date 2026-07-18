@@ -3,6 +3,12 @@ const globalErrorMiddleware = (err, req, res, next) => {
   err.status = err.status || "error";
   err.message = err.message || "internal server error";
 
+  // Handle multer errors
+  if (err.code === "LIMIT_FILE_SIZE") {
+    err.statusCode = 400;
+    err.message = "File too large. Maximum size is 5MB.";
+  }
+
   if (process.env.NODE_ENV === "development") {
     errorHandlerForDev(err, res);
   } else {

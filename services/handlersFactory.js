@@ -2,6 +2,46 @@ const expressAsyncHandler = require("express-async-handler");
 const endpointError = require("../utils/endpointError");
 const ApiFeatures = require("../utils/apiFeatures");
 const ActivityLogger = require("../socket/activityLogger");
+const { deleteImageFromCloudinary } = require("../config/cloudinary");
+
+// Maps model names → which fields hold Cloudinary image URLs
+const IMAGE_FIELDS = {
+  Category:  { image: 'string' },
+  Brand:     { image: 'string' },
+  SubCategory: { image: 'string' },
+  User:      { image: 'string' },
+  Product:   { mainImage: 'string', images: 'array' },
+};
+
+/**
+ * Extract all image URLs from a document based on IMAGE_FIELDS config.
+ */
+const extractImageUrls = (doc) => {
+  const modelConfig = IMAGE_FIELDS[doc.constructor.modelName] || IMAGE_FIELDS[doc.model?.modelName];
+  if (!modelConfig) return [];
+
+  const urls = [];
+  for (const [field, type] of Object.entries(modelConfig)) {
+    const value = doc[field];
+    if (!value) continue;
+    if (type === 'array' && Array.isArray(value)) {
+      urls.push(...value.filter(Boolean));
+    } else if (type === 'string' && typeof value === 'string') {
+      urls.push(value);
+    }
+  }
+  return urls;
+};
+
+/**
+ * Delete all Cloudinary images for a list of documents (fire-and-forget).
+ */
+const cleanupDocumentImages = (docs) => {
+  const urls = docs.flatMap(extractImageUrls);
+  if (urls.length > 0) {
+    Promise.all(urls.map(deleteImageFromCloudinary)).catch(() => {});
+  }
+};
 
 // Activity configuration for different models
 const ACTIVITY_CONFIG = {
@@ -322,25 +362,10 @@ exports.deleteOne = (Model) =>
 
     // Get activity config
     const config = getActivityConfig(Model);
-    let documentToDelete = null;
 
-    // Get document before deletion if activity logging is enabled
-    if (config && req.user) {
-      documentToDelete = await Model.findById(documentId);
-      if (!documentToDelete) {
-        return next(
-          new endpointError(
-            `there is no ${Model.modelName} with this ID format`,
-            404
-          )
-        );
-      }
-    }
-
-    // Delete the document
-    const deletedDocument = await Model.findByIdAndDelete(documentId);
-
-    if (!deletedDocument) {
+    // Always fetch document before deletion (for image cleanup + activity logging)
+    const documentToDelete = await Model.findById(documentId);
+    if (!documentToDelete) {
       return next(
         new endpointError(
           `there is no ${Model.modelName} with this ID format`,
@@ -349,8 +374,14 @@ exports.deleteOne = (Model) =>
       );
     }
 
+    // Delete the document
+    await Model.findByIdAndDelete(documentId);
+
+    // Cleanup Cloudinary images (fire-and-forget)
+    cleanupDocumentImages([documentToDelete]);
+
     // Log activity if config exists and user is available
-    if (config && req.user && documentToDelete) {
+    if (config && req.user) {
       const logMethod = ActivityLogger[config.methods.delete];
       if (logMethod) {
         await logMethod("delete", documentToDelete, req.user);
@@ -370,12 +401,9 @@ exports.deleteMany = (Model) =>
 
     // Get activity config
     const config = getActivityConfig(Model);
-    let documentsToDelete = [];
 
-    // Get documents before deletion if activity logging is enabled
-    if (config && req.user) {
-      documentsToDelete = await Model.find({ _id: { $in: ids } });
-    }
+    // Always fetch documents before deletion (for image cleanup + activity logging)
+    const documentsToDelete = await Model.find({ _id: { $in: ids } });
 
     // Delete documents
     const deletedDocuments = await Model.deleteMany({
@@ -387,6 +415,9 @@ exports.deleteMany = (Model) =>
         new endpointError(`No ${Model.modelName} were deleted`, 404)
       );
     }
+
+    // Cleanup Cloudinary images (fire-and-forget)
+    cleanupDocumentImages(documentsToDelete);
 
     // Log bulk delete activity
     if (config && req.user && documentsToDelete.length > 0) {

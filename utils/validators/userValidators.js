@@ -54,9 +54,10 @@ const createUserValidator = [
         errorMessage: "Invalid phone number format",
       },
     },
-    profileImg: {
+    image: {
       optional: true,
-      isString: { errorMessage: "Profile image must be a string" },
+      isString: { errorMessage: "Image must be a string" },
+      isURL: { errorMessage: "Image must be a valid URL" },
       trim: true,
     },
     role: {
@@ -389,11 +390,6 @@ const updateLoggedUserDataValidator = [
         options: ["ar-DZ"],
         errorMessage: "Invalid phone number format",
       },
-    },
-    profileImg: {
-      optional: true,
-      isString: { errorMessage: "Profile image must be a string" },
-      trim: true,
     },
     // phone and other fields can be added here if needed
   }),

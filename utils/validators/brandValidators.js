@@ -28,6 +28,12 @@ const createBrandValidator = [
         },
       },
     },
+    image: {
+      optional: true,
+      isString: { errorMessage: "Image must be a string" },
+      isURL: { errorMessage: "Image must be a valid URL" },
+      trim: true,
+    },
   }),
   validatorMiddleware,
 ];

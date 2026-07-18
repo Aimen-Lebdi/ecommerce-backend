@@ -32,6 +32,9 @@ const createCategoryValidator = [
       isString: {
         errorMessage: "image must be a string",
       },
+      isURL: {
+        errorMessage: "Image must be a valid URL",
+      },
       optional: true,
       trim: true,
     },

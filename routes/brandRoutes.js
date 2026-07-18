@@ -18,13 +18,7 @@ const {
   deleteManyBrandsValidator,
 } = require("../utils/validators/brandValidators");
 const {protectRoute, allowTo, optionalAuth} = require("../services/authServices");
-const handleNullValues = (req, res, next) => {
-  // Convert '__NULL__' markers back to null for optional fields
-  if (req.body.image === "__NULL__") {
-    req.body.image = null;
-  }
-  next();
-};
+const handleNullValues = require("../middlewares/handleNullValues");
 
 router
   .route("/")
@@ -64,7 +58,7 @@ router
     allowTo("admin"),
     uploadBrandImage,
     resizeBrandImage,
-    handleNullValues,
+    handleNullValues("image"),
     updateBrandValidator,
     updateBrand
   )

@@ -29,13 +29,7 @@ const {
   deleteManyUsersValidator,
   activateManyUsersValidator,
 } = require("../utils/validators/userValidators");
-const handleNullValues = (req, res, next) => {
-  // Convert '__NULL__' markers back to null for optional fields
-  if (req.body.image === "__NULL__") {
-    req.body.image = null;
-  }
-  next();
-};
+const handleNullValues = require("../middlewares/handleNullValues");
 router.use(authServices.protectRoute);
 
 // ===== USER ROUTES =====
@@ -102,7 +96,7 @@ router
     authServices.allowTo("admin"),
     uploadUserImage,
     resizeUserImage,
-    handleNullValues,
+    handleNullValues("image"),
     updateUserValidator,
     updateUser
   )
