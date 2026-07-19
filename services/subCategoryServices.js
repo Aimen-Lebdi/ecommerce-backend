@@ -7,7 +7,7 @@ const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const uploadSubCategoryImage = uploadSingleImage("image", "subcategories");
 
 // No need for sharp anymore - Cloudinary handles it!
-const resizeSubCategoryImage = expressAsyncHandler(async (req, res, next) => {
+const processSubCategoryImage = expressAsyncHandler(async (req, res, next) => {
   if (req.file) {
     // Cloudinary automatically uploads and returns the full URL
     // Store the full URL in the database
@@ -45,7 +45,7 @@ module.exports = {
   deleteSubCategory,
   deleteManySubCategories,
   uploadSubCategoryImage,
-  resizeSubCategoryImage,
+  processSubCategoryImage,
   fromParamsToBody,
   createFilterObj,
 };

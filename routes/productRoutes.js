@@ -8,7 +8,7 @@ const {
   deleteProduct,
   deleteManyProducts,
   uploadProductImages,
-  resizeProductImages,
+  processProductImages,
 } = require("../services/productServices");
 const {
   createProductValidator,
@@ -34,7 +34,7 @@ router
     protectRoute,
     allowTo("admin"),
     uploadProductImages,
-    resizeProductImages,
+    processProductImages,
     createProductValidator,
     createProduct
   );
@@ -58,7 +58,7 @@ router
     protectRoute,
     allowTo("admin"),
     uploadProductImages,
-    resizeProductImages,
+    processProductImages,
     handleNullValues("subCategory", "brand", "images"),
     updateProductValidator,
     updateProduct

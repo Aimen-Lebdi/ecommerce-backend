@@ -8,7 +8,7 @@ const {
   deleteSubCategory,
   deleteAllSubCategories,
   uploadSubCategoryImage,
-  resizeSubCategoryImage,
+  processSubCategoryImage,
   fromParamsToBody,
   createFilterObj,
   deleteManySubCategories,
@@ -37,7 +37,7 @@ router
     protectRoute,
     allowTo("admin"),
     uploadSubCategoryImage,
-  resizeSubCategoryImage,
+  processSubCategoryImage,
     fromParamsToBody,
     createSubCategoryValidator,
     createSubCategory
@@ -65,7 +65,7 @@ router
     protectRoute,
     allowTo("admin"),
     uploadSubCategoryImage,
-  resizeSubCategoryImage,
+  processSubCategoryImage,
   handleNullValues("image"),
     updateSubCategoryValidator,
     updateSubCategory

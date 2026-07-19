@@ -6,8 +6,8 @@ const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 // Upload to Cloudinary 'categories' folder
 const uploadCategoryImage = uploadSingleImage("image", "categories");
 
-// No need for resizeCategoryImage anymore - Cloudinary handles it!
-const resizeCategoryImage = expressAsyncHandler(async (req, res, next) => {
+// Cloudinary handles image processing!
+const processCategoryImage = expressAsyncHandler(async (req, res, next) => {
   if (req.file) {
     // Cloudinary automatically uploads and returns the full URL
     // Store the full URL in the database
@@ -35,5 +35,5 @@ module.exports = {
   deleteCategory,
   deleteManyCategories,
   uploadCategoryImage,
-  resizeCategoryImage,
+  processCategoryImage,
 };

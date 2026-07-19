@@ -11,7 +11,7 @@ const ActivityLogger = require("../socket/activityLogger");
 const uploadUserImage = uploadSingleImage("image", "users");
 
 // No need for sharp anymore - Cloudinary handles it!
-const resizeUserImage = expressAsyncHandler(async (req, res, next) => {
+const processUserImage = expressAsyncHandler(async (req, res, next) => {
   if (req.file) {
     // Cloudinary automatically uploads and returns the full URL
     req.body.image = req.file.path; // This is the Cloudinary URL
@@ -256,5 +256,5 @@ module.exports = {
   updateLoggedUserData,
   deleteLoggedUserData,
   uploadUserImage,
-  resizeUserImage,
+  processUserImage,
 };

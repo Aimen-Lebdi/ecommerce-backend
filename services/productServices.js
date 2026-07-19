@@ -19,7 +19,7 @@ const uploadProductImages = uploadMixOfImages(
 );
 
 // No need for sharp anymore - Cloudinary handles it!
-const resizeProductImages = expressAsyncHandler(async (req, res, next) => {
+const processProductImages = expressAsyncHandler(async (req, res, next) => {
   // 1- Process mainImage
   if (req.files.mainImage) {
     // Cloudinary automatically uploads and returns the full URL
@@ -47,7 +47,7 @@ const deleteManyProducts = factory.deleteMany(Product);
 
 module.exports = {
   uploadProductImages,
-  resizeProductImages,
+  processProductImages,
   createProduct,
   getAllProducts,
   getOneProduct,

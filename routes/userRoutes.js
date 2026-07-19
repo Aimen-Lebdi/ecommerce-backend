@@ -12,7 +12,7 @@ const {
   updateLoggedUserData,
   deleteLoggedUserData,
   uploadUserImage,
-  resizeUserImage,
+  processUserImage,
   deleteManyUsers,
   activateManyUsers,
   activateUser,
@@ -43,7 +43,7 @@ router.put(
   "/updateMe",
   authServices.allowTo("user","admin"),
   uploadUserImage,
-  resizeUserImage,
+  processUserImage,
   updateLoggedUserDataValidator,
   updateLoggedUserData
 );
@@ -62,7 +62,7 @@ router
   .post(
     authServices.allowTo("admin"),
     uploadUserImage,
-    resizeUserImage,
+    processUserImage,
     createUserValidator,
     createUser
   );
@@ -95,7 +95,7 @@ router
   .put(
     authServices.allowTo("admin"),
     uploadUserImage,
-    resizeUserImage,
+    processUserImage,
     handleNullValues("image"),
     updateUserValidator,
     updateUser

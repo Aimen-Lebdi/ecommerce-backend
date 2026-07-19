@@ -218,13 +218,13 @@ const updateUserValidator = [
       },
     },
     image: {
+      optional: {options: { nullable: true }},
       isString: {
         errorMessage: "image must be a string",
       },
       isURL: {
         errorMessage: "Image must be a valid URL",
       },
-      optional: {options: { nullable: true }},
       trim: true,
     },
   }),

@@ -7,7 +7,7 @@ const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const uploadBrandImage = uploadSingleImage('image', 'brands');
 
 // No need for sharp anymore - Cloudinary handles it!
-const resizeBrandImage = expressAsyncHandler(async (req, res, next) => {
+const processBrandImage = expressAsyncHandler(async (req, res, next) => {
   if (req.file) {
     // Cloudinary automatically uploads and returns the full URL
     // Store the full URL in the database
@@ -32,5 +32,5 @@ module.exports = {
   deleteBrand,
   deleteManyBrands,
   uploadBrandImage,
-  resizeBrandImage,
+  processBrandImage,
 };

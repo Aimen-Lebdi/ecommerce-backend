@@ -8,7 +8,7 @@ const {
   deleteBrand,
   deleteManyBrands,
   uploadBrandImage,
-  resizeBrandImage,
+  processBrandImage,
 } = require("../services/brandServices");
 const {
   createBrandValidator,
@@ -31,7 +31,7 @@ router
     protectRoute,
     allowTo("admin"),
     uploadBrandImage,
-    resizeBrandImage,
+    processBrandImage,
     createBrandValidator,
     createBrand
   )
@@ -57,7 +57,7 @@ router
     protectRoute,
     allowTo("admin"),
     uploadBrandImage,
-    resizeBrandImage,
+    processBrandImage,
     handleNullValues("image"),
     updateBrandValidator,
     updateBrand
