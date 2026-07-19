@@ -23,11 +23,13 @@ const createCloudinaryStorage = (folder) => {
 };
 
 // Multer filter
+const ALLOWED_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 const multerFilter = function (req, file, cb) {
-  if (file.mimetype.startsWith('image')) {
+  if (ALLOWED_MIMETYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new ApiError('Only Images allowed', 400), false);
+    cb(new ApiError('Only JPG, PNG, and WebP images are allowed', 400), false);
   }
 };
 
