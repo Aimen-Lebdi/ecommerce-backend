@@ -151,7 +151,8 @@ server.listen(PORT, () => {
 
 process.on("unhandledRejection", (err) => {
   console.log(`Unhandled error: ${err.name} | ${err.message}`);
-  //  
+  // Don't shut down the server for non-critical errors
+  // server.close(() => process.exit(1)); 
 });
 
 // Export server for testing purposes

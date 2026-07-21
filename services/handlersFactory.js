@@ -251,9 +251,16 @@ exports.getAll = (Model, searchFields = [], populationOpt) =>
     const documents = await query.mongooseQuery;
 
     if (documents.length === 0) {
-      return next(
-        new endpointError(`there are no ${Model.modelName} to get`, 404)
-      );
+      return res.status(200).json({
+        result: 0,
+        pagination: {
+          currentPage: 1,
+          limit: parseInt(req.query.limit) || 10,
+          numberOfPages: 0,
+          totalResults: 0,
+        },
+        documents: [],
+      });
     }
 
     res.status(200).json({
