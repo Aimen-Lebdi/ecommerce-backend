@@ -9,7 +9,6 @@ const subCategorySchema = new mongoose.Schema(
         message: "Name must be a string",
       },
       required: [true, "Subcategory name is required"],
-      unique: [true, "Subcategory name must be unique"],
       trim: true,
     },
     slug: {
@@ -46,6 +45,9 @@ subCategorySchema.statics.updateProductCount = async function (subCategoryId) {
   await this.findByIdAndUpdate(subCategoryId, { productCount: count });
   return count;
 };
+
+// Compound index: same name is allowed in different categories, but unique within a category
+subCategorySchema.index({ name: 1, category: 1 }, { unique: true });
 
 const subCategoryModel = mongoose.model("Subcategory", subCategorySchema);
 

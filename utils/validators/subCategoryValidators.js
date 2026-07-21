@@ -20,9 +20,11 @@ const createSubCategoryValidator = [
           const existingCategory = await subCategoryModel
             .find()
             .where("name")
-            .equals(val);
+            .equals(val)
+            .where("category")
+            .equals(req.body.category);
           if (existingCategory && existingCategory.length > 0) {
-            throw new Error("Subcategory name already exists");
+            throw new Error("Subcategory name already exists in this category");
           }
           req.body.slug = Slugify(val);
           return true;
@@ -121,12 +123,16 @@ const updateSubCategoryValidator = [
       escape: true,
       custom: {
         options: async (val, { req }) => {
+          const subCategory = await subCategoryModel.findById(req.params.id);
+          const categoryId = req.body.category || (subCategory && subCategory.category);
           const existingCategory = await subCategoryModel
             .find()
             .where("name")
-            .equals(val);
+            .equals(val)
+            .where("category")
+            .equals(categoryId);
           if (existingCategory && existingCategory.length > 0) {
-            throw new Error("Subcategory name already exists");
+            throw new Error("Subcategory name already exists in this category");
           }
           req.body.slug = Slugify(val);
           return true;
