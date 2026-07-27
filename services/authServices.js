@@ -21,6 +21,28 @@ const createRefreshToken = (userId) => {
   });
 };
 
+// Export createAccessToken for use by other services (e.g. userServices)
+exports.createAccessToken = createAccessToken;
+
+// Helper: Set refresh token as httpOnly cookie (eliminates duplication across handlers)
+const setRefreshTokenCookie = (res, refreshToken) => {
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+  });
+};
+
+// Helper: Check if password was changed after token was issued
+const isPasswordChangedAfter = (user, tokenIat) => {
+  if (user.passwordChangedAt) {
+    const passToTimeStamp = parseInt(user.passwordChangedAt.getTime() / 1000, 10);
+    return passToTimeStamp > tokenIat;
+  }
+  return false;
+};
+
 exports.signUp = expressAsyncHandler(async (req, res, next) => {
   const user = await userModel.create({
     name: req.body.name,
@@ -31,30 +53,28 @@ exports.signUp = expressAsyncHandler(async (req, res, next) => {
   const accessToken = createAccessToken(user._id);
   const refreshToken = createRefreshToken(user._id);
 
-  // Set refresh token in httpOnly cookie
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-  });
+  setRefreshTokenCookie(res, refreshToken);
 
   await ActivityLogger.logUserActivity("create", user, user, {
     registrationMethod: "email",
     ipAddress: req.ip,
   });
 
+  // Strip password from response
+  const userResponse = user.toObject();
+  delete userResponse.password;
+
   res.status(201).json({
-    data: user,
+    data: userResponse,
     accessToken,
-    refreshToken,
   });
 });
 
 exports.signIn = expressAsyncHandler(async (req, res, next) => {
+  // password field is hidden by default (select: false) — explicitly include for comparison
   const user = await userModel.findOne({
     email: req.body.email,
-  });
+  }).select("+password");
 
   if (!user || !(await bcrypt.compare(req.body.password, user.password))) {
     return next(new Error("Invalid email or password"));
@@ -72,20 +92,15 @@ exports.signIn = expressAsyncHandler(async (req, res, next) => {
   const accessToken = createAccessToken(user._id);
   const refreshToken = createRefreshToken(user._id);
 
-  // Set refresh token in httpOnly cookie
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  });
+  setRefreshTokenCookie(res, refreshToken);
 
-  delete user._doc.password;
+  // Strip password from response
+  const userResponse = user.toObject();
+  delete userResponse.password;
 
   res.status(200).json({
-    data: user,
+    data: userResponse,
     accessToken,
-    refreshToken,
   });
 });
 
@@ -115,15 +130,7 @@ exports.refreshAccessToken = expressAsyncHandler(async (req, res, next) => {
     }
 
     // Check if password was changed after token was issued
-    let passToTimeStamp;
-    if (user.passwordChangedAt) {
-      passToTimeStamp = parseInt(
-        user.passwordChangedAt.getTime() / 1000,
-        10
-      );
-    }
-
-    if (passToTimeStamp > decoded.iat) {
+    if (isPasswordChangedAfter(user, decoded.iat)) {
       return next(
         new endpointError(
           "User recently changed password, please log in again",
@@ -136,16 +143,10 @@ exports.refreshAccessToken = expressAsyncHandler(async (req, res, next) => {
     const newAccessToken = createAccessToken(user._id);
     const newRefreshToken = createRefreshToken(user._id);
 
-    res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    setRefreshTokenCookie(res, newRefreshToken);
 
     res.status(200).json({
       accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
     });
   } catch (error) {
     return next(new endpointError("Invalid refresh token", 401));
@@ -179,15 +180,7 @@ exports.protectRoute = expressAsyncHandler(async (req, res, next) => {
       return next(new endpointError("Your account has been deactivated", 403));
     }
 
-    let passToTimeStamp;
-    if (currentUser.passwordChangedAt) {
-      passToTimeStamp = parseInt(
-        currentUser.passwordChangedAt.getTime() / 1000,
-        10
-      );
-    }
-
-    if (passToTimeStamp > decoded.iat) {
+    if (isPasswordChangedAfter(currentUser, decoded.iat)) {
       return next(
         new endpointError(
           "User recently changed password, please log in again",
@@ -249,15 +242,7 @@ exports.optionalAuth = expressAsyncHandler(async (req, res, next) => {
       return next();
     }
 
-    let passToTimeStamp;
-    if (currentUser.passwordChangedAt) {
-      passToTimeStamp = parseInt(
-        currentUser.passwordChangedAt.getTime() / 1000,
-        10
-      );
-    }
-
-    if (passToTimeStamp > decoded.iat) {
+    if (isPasswordChangedAfter(currentUser, decoded.iat)) {
       req.user = { role: "visitor" };
       return next();
     }
@@ -272,13 +257,12 @@ exports.optionalAuth = expressAsyncHandler(async (req, res, next) => {
 
 exports.forgotPassword = expressAsyncHandler(async (req, res, next) => {
   const user = await userModel.findOne({ email: req.body.email });
+
+  // Always return success to prevent email enumeration
   if (!user) {
-    return next(
-      new endpointError(
-        `There is no user with that email ${req.body.email}`,
-        404
-      )
-    );
+    return res
+      .status(200)
+      .json({ status: "Success", message: "If an account with that email exists, a reset code has been sent" });
   }
 
   const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -376,7 +360,8 @@ exports.resetPassword = expressAsyncHandler(async (req, res, next) => {
     return next(new endpointError("Reset code not verified", 400));
   }
 
-  user.password = await bcrypt.hash(req.body.newPassword, 12);
+  // Assign plain text — pre("save") hook will hash automatically
+  user.password = req.body.newPassword;
   user.passwordResetCode = undefined;
   user.passwordResetExpires = undefined;
   user.passwordResetVerified = undefined;
@@ -388,12 +373,7 @@ exports.resetPassword = expressAsyncHandler(async (req, res, next) => {
   const accessToken = createAccessToken(user._id);
   const refreshToken = createRefreshToken(user._id);
 
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  });
+  setRefreshTokenCookie(res, refreshToken);
 
   await ActivityLogger.logUserActivity("passwordChange", user, user, {
     resetMethod: "email",
@@ -402,7 +382,6 @@ exports.resetPassword = expressAsyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     accessToken,
-    refreshToken,
   });
 });
 

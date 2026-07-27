@@ -93,7 +93,7 @@ const loginValidator = [
       trim: true,
       custom: {
         options: async (val, { req }) => {
-          const user = await userModel.findOne({ email: req.body.email });
+          const user = await userModel.findOne({ email: req.body.email }).select("+password");
           if (!user) {
             throw new Error("Invalid email or password");
           }
@@ -122,14 +122,6 @@ const forgotPasswordValidator = [
     email: {
       isEmail: { errorMessage: 'Please enter a valid email' },
       notEmpty: { errorMessage: 'Email is required' },
-      custom: {
-        options: async (val) => {
-          const user = await userModel.findOne({ email: val });
-          if (!user) {
-            throw new Error('There is no user with that email');
-          }
-        },
-      },
     },
   }),
   validatorMiddleware,
@@ -172,15 +164,6 @@ const resetPasswordValidator = [
     email: {
       isEmail: { errorMessage: 'Please enter a valid email' },
       notEmpty: { errorMessage: 'Email is required' },
-      custom: {
-        options: async (val) => {
-          const user = await userModel.findOne({ email: val });
-          if (!user) {
-            throw new Error('There is no user with that email');
-          }
-          return true;
-        },
-      },
     },
     newPassword: {
       isString: { errorMessage: 'New password must be a string' },

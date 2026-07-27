@@ -118,6 +118,15 @@ const limiter = rateLimit({
 // Apply the rate limiting middleware to all requests
 app.use("/api", limiter);
 
+// Stricter rate limit for auth routes (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: "Too many authentication attempts, please try again after 15 minutes",
+});
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/forgotPassword", authLimiter);
+
 // Middleware to protect against HTTP Parameter Pollution attacks
 app.use(
   hpp({

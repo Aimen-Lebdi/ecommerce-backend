@@ -2,9 +2,8 @@ const factory = require("./handlersFactory");
 const User = require("../models/userModel");
 const expressAsyncHandler = require("express-async-handler");
 const endpointError = require("../utils/endpointError");
-const bcrypt = require("bcryptjs");
 const sendEmail = require("../utils/sendEmail");
-const { createToken } = require("../utils/createToken");
+const { createAccessToken } = require("./authServices");
 const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const ActivityLogger = require("../socket/activityLogger");
 
@@ -54,29 +53,30 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
 });
 
 const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
-  const updatedUserPassword = await User.findByIdAndUpdate(
-    req.params.id,
-    {
-      password: await bcrypt.hash(req.body.password, 12),
-      passwordChangedAt: Date.now() - 1000,
-    },
-    { new: true }
-  );
+  const user = await User.findById(req.params.id).select("+password");
 
-  if (!updatedUserPassword) {
+  if (!user) {
     return next(new endpointError(`there is no user with this ID format`, 404));
   }
+
+  // Assign plain text — pre("save") hook will hash automatically
+  user.password = req.body.password;
+  user.passwordChangedAt = Date.now() - 1000;
+  await user.save();
 
   // Log activity
   if (req.user) {
     await ActivityLogger.logUserActivity(
       "passwordChange",
-      updatedUserPassword,
+      user,
       req.user
     );
   }
 
-  res.status(200).json({ data: updatedUserPassword });
+  // Strip password from response
+  const userResponse = user.toObject();
+  delete userResponse.password;
+  res.status(200).json({ data: userResponse });
 });
 
 const banUser = expressAsyncHandler(async (req, res, next) => {
@@ -317,20 +317,19 @@ const getLoggedUserData = expressAsyncHandler(async (req, res, next) => {
 });
 
 const updateLoggedUserPassword = expressAsyncHandler(async (req, res, next) => {
-  const user = await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      password: await bcrypt.hash(req.body.password, 12),
-      passwordChangedAt: Date.now() - 1000,
-    },
-    {
-      new: true,
-    }
-  );
+  const user = await User.findById(req.user._id).select("+password");
 
-  const token = createToken(user._id);
+  // Assign plain text — pre("save") hook will hash automatically
+  user.password = req.body.password;
+  user.passwordChangedAt = Date.now() - 1000;
+  await user.save();
 
-  res.status(200).json({ data: user, token });
+  const accessToken = createAccessToken(user._id);
+
+  // Strip password from response
+  const userResponse = user.toObject();
+  delete userResponse.password;
+  res.status(200).json({ data: userResponse, accessToken });
 });
 
 const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {

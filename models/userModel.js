@@ -34,13 +34,13 @@ const userSchema = mongoose.Schema(
     },
     password: {
       type: String,
+      select: false,
       validate: {
         validator: (v) => typeof v === "string",
         message: "Password must be a string",
       },
       required: [true, "Password is required"],
-      min: [6, "Password must be at least 6 characters"],
-      trim: true,
+      minlength: [6, "Password must be at least 6 characters"],
     },
     passwordChangedAt: {
       type: Date,

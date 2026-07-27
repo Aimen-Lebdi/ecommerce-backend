@@ -29,7 +29,7 @@ router.post("/delivery/webhook", deliveryWebhook);
 router.get(
   "/session/:sessionId",
   authService.protectRoute,
-  authService.allowTo("user"," admin"),
+  authService.allowTo("user", "admin"),
   getOrderBySession
 );
 
