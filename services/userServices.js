@@ -1,9 +1,10 @@
 const factory = require("./handlersFactory");
 const User = require("../models/userModel");
 const expressAsyncHandler = require("express-async-handler");
-const userModel = require("../models/userModel");
 const endpointError = require("../utils/endpointError");
 const bcrypt = require("bcryptjs");
+const sendEmail = require("../utils/sendEmail");
+const { createToken } = require("../utils/createToken");
 const { uploadSingleImage } = require("../middlewares/uploadImageMiddleware");
 const ActivityLogger = require("../socket/activityLogger");
 
@@ -32,6 +33,7 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
       active: req.body.active,
       role: req.body.role,
       image: req.body.image,
+      phone: req.body.phone,
     },
     { new: true }
   );
@@ -56,7 +58,7 @@ const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
     req.params.id,
     {
       password: await bcrypt.hash(req.body.password, 12),
-      passwordChangedAt: Date.now(),
+      passwordChangedAt: Date.now() - 1000,
     },
     { new: true }
   );
@@ -77,58 +79,164 @@ const updateUserPassword = expressAsyncHandler(async (req, res, next) => {
   res.status(200).json({ data: updatedUserPassword });
 });
 
-const deleteUser = expressAsyncHandler(async (req, res, next) => {
-  const userToDeactivate = await User.findById(req.params.id);
+const banUser = expressAsyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
 
-  if (!userToDeactivate) {
+  if (!user) {
     return next(new endpointError(`There is no user with this ID`, 404));
   }
 
-  const deactivatedUser = await User.findByIdAndUpdate(
+  if (user.role === "admin") {
+    return next(new endpointError(`Cannot ban an admin user`, 403));
+  }
+
+  if (user.active === false) {
+    return next(new endpointError(`User is already banned`, 400));
+  }
+
+  const bannedUser = await User.findByIdAndUpdate(
     req.params.id,
-    { active: false },
+    {
+      active: false,
+      passwordChangedAt: Date.now(),
+    },
     { new: true }
   );
 
+  // Send ban notification email
+  try {
+    await sendEmail({
+      email: bannedUser.email,
+      subject: `Your account has been suspended`,
+      html: `<h1>Hello ${bannedUser.name}</h1><p>Your account has been suspended by an administrator.</p><p>If you believe this is a mistake, please contact our support team.</p>`,
+    });
+  } catch (err) {
+    // Email failure should not block the ban operation
+  }
+
   // Log activity
   if (req.user) {
-    await ActivityLogger.logUserActivity("delete", deactivatedUser, req.user);
+    await ActivityLogger.logUserActivity("ban", bannedUser, req.user, {
+      reason: "No reason provided",
+      changes: "Account suspended by admin",
+    });
   }
 
   res.status(200).json({
     status: "Success",
-    message: "User deactivated successfully",
-    data: deactivatedUser,
+    message: "User banned successfully",
+    data: bannedUser,
   });
 });
 
-const deleteManyUsers = expressAsyncHandler(async (req, res, next) => {
+const unbanUser = expressAsyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(new endpointError(`There is no user with this ID`, 404));
+  }
+
+  if (user.active === true) {
+    return next(new endpointError(`User is not banned`, 400));
+  }
+
+  const unbannedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    {
+      active: true,
+    },
+    { new: true }
+  );
+
+  // Send unban notification email
+  try {
+    await sendEmail({
+      email: unbannedUser.email,
+      subject: `Your account has been reactivated`,
+      html: `<h1>Hello ${unbannedUser.name}</h1><p>Your account has been reactivated.</p><p>You can now log in and continue using our services.</p>`,
+    });
+  } catch (err) {
+    // Email failure should not block the unban operation
+  }
+
+  // Log activity
+  if (req.user) {
+    await ActivityLogger.logUserActivity("unban", unbannedUser, req.user);
+  }
+
+  res.status(200).json({
+    status: "Success",
+    message: "User unbanned successfully",
+    data: unbannedUser,
+  });
+});
+
+const banManyUsers = expressAsyncHandler(async (req, res, next) => {
   const { ids } = req.body;
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return next(new endpointError("Please provide an array of user IDs", 400));
   }
 
-  const result = await User.updateMany(
-    { _id: { $in: ids } },
-    { active: false }
-  );
+  const bannedUsers = [];
+  const skippedUsers = [];
+  const notFoundIds = [];
+
+  for (const id of ids) {
+    const user = await User.findById(id);
+
+    if (!user) {
+      notFoundIds.push(id);
+      continue;
+    }
+
+    if (user.role === "admin") {
+      skippedUsers.push({ id: user._id, name: user.name, reason: "Cannot ban an admin user" });
+      continue;
+    }
+
+    if (user.active === false) {
+      skippedUsers.push({ id: user._id, name: user.name, reason: "User is already banned" });
+      continue;
+    }
+
+    const bannedUser = await User.findByIdAndUpdate(
+      id,
+      { active: false, passwordChangedAt: Date.now() },
+      { new: true }
+    );
+
+    // Send ban notification email (non-blocking)
+    try {
+      await sendEmail({
+        email: bannedUser.email,
+        subject: `Your account has been suspended`,
+        html: `<h1>Hello ${bannedUser.name}</h1><p>Your account has been suspended by an administrator.</p><p>If you believe this is a mistake, please contact our support team.</p>`,
+      });
+    } catch (err) {
+      // Email failure should not block the ban operation
+    }
+
+    bannedUsers.push({ id: bannedUser._id, name: bannedUser.name, email: bannedUser.email });
+  }
 
   // Log activity
-  if (req.user) {
+  if (req.user && bannedUsers.length > 0) {
     await ActivityLogger.logBulkDeactivateActivity(
-      result.modifiedCount,
-      ids,
+      bannedUsers.length,
+      bannedUsers.map((u) => u.id),
       req.user
     );
   }
 
   res.status(200).json({
     status: "Success",
-    message: `${result.modifiedCount} user(s) deactivated successfully`,
+    message: `${bannedUsers.length} user(s) banned successfully`,
     data: {
-      modifiedCount: result.modifiedCount,
-      matchedCount: result.matchedCount,
+      bannedCount: bannedUsers.length,
+      bannedUsers,
+      skippedUsers,
+      notFoundIds,
     },
   });
 });
@@ -165,27 +273,40 @@ const activateManyUsers = expressAsyncHandler(async (req, res, next) => {
     return next(new endpointError("Please provide an array of user IDs", 400));
   }
 
-  const result = await User.updateMany(
-    { _id: { $in: ids } },
-    { active: true }
-  );
+  const activatedUsers = [];
+  const skippedUsers = [];
+  const notFoundIds = [];
 
-  // Log activity
-  if (req.user) {
+  for (const id of ids) {
+    const user = await User.findById(id);
+    if (!user) {
+      notFoundIds.push(id);
+      continue;
+    }
+    if (user.active === true) {
+      skippedUsers.push({ id: user._id, name: user.name, reason: "User is already active" });
+      continue;
+    }
+    const activatedUser = await User.findByIdAndUpdate(
+      id,
+      { active: true },
+      { new: true }
+    );
+    activatedUsers.push({ id: activatedUser._id, name: activatedUser.name, email: activatedUser.email });
+  }
+
+  if (req.user && activatedUsers.length > 0) {
     await ActivityLogger.logBulkActivateActivity(
-      result.modifiedCount,
-      ids,
+      activatedUsers.length,
+      activatedUsers.map((u) => u.id),
       req.user
     );
   }
 
   res.status(200).json({
     status: "Success",
-    message: `${result.modifiedCount} user(s) activated successfully`,
-    data: {
-      modifiedCount: result.modifiedCount,
-      matchedCount: result.matchedCount,
-    },
+    message: `${activatedUsers.length} user(s) activated successfully`,
+    data: { activatedCount: activatedUsers.length, activatedUsers, skippedUsers, notFoundIds },
   });
 });
 
@@ -200,7 +321,7 @@ const updateLoggedUserPassword = expressAsyncHandler(async (req, res, next) => {
     req.user._id,
     {
       password: await bcrypt.hash(req.body.password, 12),
-      passwordChangedAt: Date.now(),
+      passwordChangedAt: Date.now() - 1000,
     },
     {
       new: true,
@@ -225,36 +346,20 @@ const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {
   res.status(200).json({ data: updatedUser });
 });
 
-const deleteLoggedUserData = expressAsyncHandler(async (req, res, next) => {
-  const deactivatedUser = await userModel.findByIdAndUpdate(req.user._id, {
-    active: false,
-  });
-
-  // Log activity - user deactivated their own account
-  if (req.user) {
-    await ActivityLogger.logUserActivity("delete", deactivatedUser, req.user, {
-      selfDeactivation: true,
-      reason: "User deactivated their own account",
-    });
-  }
-
-  res.status(204).json({ status: "Success" });
-});
-
 module.exports = {
   createUser,
   getAllUsers,
   getOneUser,
   updateUser,
   updateUserPassword,
-  deleteUser,
-  deleteManyUsers,
+  banManyUsers,
   activateUser,
   activateManyUsers,
+  banUser,
+  unbanUser,
   getLoggedUserData,
   updateLoggedUserPassword,
   updateLoggedUserData,
-  deleteLoggedUserData,
   uploadUserImage,
   processUserImage,
 };

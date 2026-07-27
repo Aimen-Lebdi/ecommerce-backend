@@ -99,24 +99,6 @@ const ACTIVITY_CONFIG = {
       delete: "logSubCategoryActivity",
     },
   },
-  Review: {
-    modelType: "review",
-    nameField: "_id",
-    methods: {
-      create: "logReviewActivity",
-      update: "logReviewActivity",
-      delete: "logReviewActivity",
-    },
-  },
-  Coupon: {
-    modelType: "coupon",
-    nameField: "name",
-    methods: {
-      create: "logCouponActivity",
-      update: "logCouponActivity",
-      delete: "logCouponActivity",
-    },
-  },
   Cart: {
     modelType: "cart",
     nameField: "_id",

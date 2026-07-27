@@ -96,8 +96,7 @@ const getUserValidator = [
   validatorMiddleware,
 ];
 
-const deleteUserValidator = getUserValidator; // Same validation logic as getting one user
-const deleteManyUsersValidator = [
+const banManyUsersValidator = [
   checkSchema({
     ids: {
       isArray: {
@@ -111,21 +110,21 @@ const deleteManyUsersValidator = [
           if (!Array.isArray(ids)) {
             throw new Error("IDs must be an array");
           }
-          
-          // Validate each ID is a valid MongoDB ObjectId
+
           for (const id of ids) {
             if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-              throw new Error(`Invalid category ID: ${id}`);
+              throw new Error(`Invalid user ID: ${id}`);
             }
           }
-          
+
           return true;
         },
       },
     },
   }),
   validatorMiddleware,
-]
+];
+
 const activateManyUsersValidator = [
   checkSchema({
     ids: {
@@ -155,6 +154,29 @@ const activateManyUsersValidator = [
   }),
   validatorMiddleware,
 ];
+
+// --------------------------------------------------
+// 2b. Ban User Validator (PUT /:id/ban)
+// --------------------------------------------------
+const banUserValidator = [
+  checkSchema({
+    id: {
+      notEmpty: { errorMessage: "User ID is required" },
+      isMongoId: { errorMessage: "Invalid User ID format" },
+      custom: {
+        options: async (val) => {
+          const user = await userModel.findById(val);
+          if (!user) {
+            throw new Error("User does not exist");
+          }
+          return true;
+        },
+      },
+    },
+  }),
+  validatorMiddleware,
+];
+
 // --------------------------------------------------
 // 3. Update User Validator (PUT /:id)
 // --------------------------------------------------
@@ -364,34 +386,8 @@ const updateLoggedUserDataValidator = [
         },
       },
     },
-    email: {
-      optional: true,
-      isEmail: { errorMessage: "Please enter a valid email" },
-      trim: true,
-      toLowerCase: true,
-      custom: {
-        options: async (val, { req }) => {
-          // Check for uniqueness but allow current user's email
-          // NOTE: This assumes 'req.user' is populated by 'protectRoute' middleware
-          const existingUser = await userModel.findOne({ email: val });
-          if (
-            existingUser &&
-            existingUser._id.toString() !== req.user._id.toString()
-          ) {
-            throw new Error("Email must be unique");
-          }
-          return true;
-        },
-      },
-    },
-    phone: {
-      optional: true,
-      isMobilePhone: {
-        options: ["ar-DZ"],
-        errorMessage: "Invalid phone number format",
-      },
-    },
-    // phone and other fields can be added here if needed
+    // NOTE: email and phone are not editable by logged users via this endpoint.
+    // Admin updateUser endpoint handles email/phone changes.
   }),
   validatorMiddleware,
 ];
@@ -400,9 +396,9 @@ module.exports = {
   createUserValidator,
   getUserValidator,
   updateUserValidator,
-  deleteUserValidator,
-  deleteManyUsersValidator,
+  banManyUsersValidator,
   activateManyUsersValidator,
+  banUserValidator,
   updateUserPasswordValidator,
   updateLoggedUserPasswordValidator,
   updateLoggedUserDataValidator,

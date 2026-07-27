@@ -6,28 +6,28 @@ const {
   getOneUser,
   updateUser,
   updateUserPassword,
-  deleteUser,
   getLoggedUserData,
   updateLoggedUserPassword,
   updateLoggedUserData,
-  deleteLoggedUserData,
   uploadUserImage,
   processUserImage,
-  deleteManyUsers,
+  banManyUsers,
   activateManyUsers,
   activateUser,
+  banUser,
+  unbanUser,
 } = require("../services/userServices");
 const authServices = require("../services/authServices");
 const {
   createUserValidator,
   getUserValidator,
   updateUserValidator,
-  deleteUserValidator,
   updateUserPasswordValidator,
   updateLoggedUserDataValidator,
   updateLoggedUserPasswordValidator,
-  deleteManyUsersValidator,
+  banManyUsersValidator,
   activateManyUsersValidator,
+  banUserValidator,
 } = require("../utils/validators/userValidators");
 const handleNullValues = require("../middlewares/handleNullValues");
 router.use(authServices.protectRoute);
@@ -53,7 +53,6 @@ router.put(
   updateLoggedUserPasswordValidator,
   updateLoggedUserPassword
 );
-// router.delete("/deleteMe", authServices.allowTo("user"), deleteLoggedUserData);
 
 // ===== ADMIN ROUTES =====
 router
@@ -67,11 +66,11 @@ router
     createUser
   );
 router
-  .route("/bulk-delete")
+  .route("/bulk-ban")
   .post(
     authServices.allowTo("admin"),
-    deleteManyUsersValidator,
-    deleteManyUsers
+    banManyUsersValidator,
+    banManyUsers
   );
   // NEW: Bulk activate route
 router
@@ -90,6 +89,22 @@ router
   );
 
 router
+  .route("/:id/ban")
+  .put(
+    authServices.allowTo("admin"),
+    banUserValidator,
+    banUser
+  );
+
+router
+  .route("/:id/unban")
+  .put(
+    authServices.allowTo("admin"),
+    getUserValidator,
+    unbanUser
+  );
+
+router
   .route("/:id")
   .get(authServices.allowTo("admin"), getUserValidator, getOneUser)
   .put(
@@ -99,8 +114,7 @@ router
     handleNullValues("image"),
     updateUserValidator,
     updateUser
-  )
-  .delete(authServices.allowTo("admin"), deleteUserValidator, deleteUser);
+  );
 
 router.put(
   "/changePassword/:id",

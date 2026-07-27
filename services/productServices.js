@@ -40,7 +40,7 @@ const processProductImages = expressAsyncHandler(async (req, res, next) => {
 
 const createProduct = factory.createOne(Product);
 const getAllProducts = factory.getAll(Product, ["name", "description"]);
-const getOneProduct = factory.getOne(Product, "reviews");
+const getOneProduct = factory.getOne(Product);
 const updateProduct = factory.updateOne(Product);
 const deleteProduct = factory.deleteOne(Product);
 const deleteManyProducts = factory.deleteMany(Product);

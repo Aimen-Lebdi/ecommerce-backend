@@ -186,6 +186,8 @@ class ActivityLogger {
       delete: "User Deactivated",
       activate: "User Activated",
       passwordChange: "User Password Changed",
+      ban: "User Banned",
+      unban: "User Unbanned",
     };
 
     const descriptions = {
@@ -196,6 +198,8 @@ class ActivityLogger {
       delete: `User "${targetUser.name}" account deactivated`,
       activate: `User "${targetUser.name}" account activated`,
       passwordChange: `Password changed for user "${targetUser.name}"`,
+      ban: `User "${targetUser.name}" (${targetUser.email}) account suspended by admin`,
+      unban: `User "${targetUser.name}" (${targetUser.email}) account reactivated by admin`,
     };
 
     return await ActivityLogger.logActivity({
@@ -278,86 +282,17 @@ class ActivityLogger {
     });
   }
 
-  // ==================== REVIEW ACTIVITIES ====================
-  static async logReviewActivity(action, review, user, additionalData = {}) {
-    const activities = {
-      create: "Review Added",
-      update: "Review Updated",
-      delete: "Review Deleted",
-    };
-
-    const descriptions = {
-      create: `New review added for product "${additionalData.productTitle}" - Rating: ${review.rating}/5`,
-      update: `Review updated for product "${additionalData.productTitle}" - Rating: ${review.rating}/5`,
-      delete: `Review deleted for product "${additionalData.productTitle}"`,
-    };
-
-    return await ActivityLogger.logActivity({
-      type: "review",
-      activity: activities[action],
-      user,
-      description: descriptions[action],
-      relatedId: review._id,
-      relatedModel: "Review",
-      metadata: {
-        reviewRating: review.rating,
-        productId: review.product,
-        productTitle: additionalData.productTitle,
-        userId: review.user,
-        userName: additionalData.userName,
-        ...additionalData,
-      },
-    });
-  }
-
-  // ==================== COUPON ACTIVITIES ====================
-  static async logCouponActivity(action, coupon, user, additionalData = {}) {
-    const activities = {
-      create: "Coupon Created",
-      update: "Coupon Updated",
-      delete: "Coupon Deleted",
-    };
-
-    const descriptions = {
-      create: `New coupon "${coupon.name}" created - Discount: ${coupon.discount}%${
-        additionalData.usageLimit ? ` (Limit: ${additionalData.usageLimit})` : ""
-      }`,
-      update: `Coupon "${coupon.name}" updated${
-        additionalData.changes ? ` - ${additionalData.changes}` : ""
-      }`,
-      delete: `Coupon "${coupon.name}" deleted`,
-    };
-
-    return await ActivityLogger.logActivity({
-      type: "coupon",
-      activity: activities[action],
-      user,
-      description: descriptions[action],
-      amount: coupon.discount || null,
-      relatedId: coupon._id,
-      relatedModel: "Coupon",
-      metadata: {
-        couponName: coupon.name,
-        couponCode: coupon.code,
-        discount: coupon.discount,
-        expires: coupon.expire,
-        ...additionalData,
-      },
-    });
-  }
 
   // ==================== CART ACTIVITIES ====================
   static async logCartActivity(action, cart, user, additionalData = {}) {
     const activities = {
       update: "Cart Updated",
       clear: "Cart Cleared",
-      applyCoupon: "Coupon Applied",
     };
 
     const descriptions = {
       update: `Cart updated - Items: ${cart.cartItems?.length || 0}, Total: ${cart.totalCartPrice} DZD`,
       clear: `Cart cleared`,
-      applyCoupon: `Coupon "${additionalData.couponName}" applied - Discount: ${additionalData.discount}%`,
     };
 
     return await ActivityLogger.logActivity({
@@ -372,7 +307,6 @@ class ActivityLogger {
         cartItemsCount: cart.cartItems?.length || 0,
         totalPrice: cart.totalCartPrice,
         totalAfterDiscount: cart.totalPriceAfterDiscount,
-        couponApplied: additionalData.couponName || null,
         ...additionalData,
       },
     });

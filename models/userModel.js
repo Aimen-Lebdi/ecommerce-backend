@@ -89,6 +89,10 @@ const userSchema = mongoose.Schema(
       default: true,
     },
     image: String, // Will store full Cloudinary URL
+    phone: {
+      type: String,
+      trim: true,
+    },
 
     // child reference (one to many)
     wishlist: [
@@ -112,12 +116,9 @@ const userSchema = mongoose.Schema(
 
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 10);
+  this.password = await bcrypt.hash(this.password, 12);
   next();
 });
-
-// Remove all the setImageURL logic - not needed with Cloudinary!
-// Cloudinary returns full URLs, so we just store them directly
 
 const userModel = mongoose.model("User", userSchema);
 

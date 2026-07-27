@@ -18,10 +18,8 @@ const {
   deleteManyProductsValidator,
 } = require("../utils/validators/productValidators");
 const { protectRoute, allowTo, optionalAuth } = require("../services/authServices");
-const reviewRoutes = require("./reviewRoutes");
 const handleNullValues = require("../middlewares/handleNullValues");
 
-router.use("/:productId/reviews", reviewRoutes);
 
 router
   .route("/")
