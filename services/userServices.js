@@ -29,7 +29,6 @@ const updateUser = expressAsyncHandler(async (req, res, next) => {
       name: req.body.name,
       slug: req.body.slug,
       email: req.body.email,
-      active: req.body.active,
       role: req.body.role,
       image: req.body.image,
       phone: req.body.phone,
@@ -114,14 +113,6 @@ const banUser = expressAsyncHandler(async (req, res, next) => {
     // Email failure should not block the ban operation
   }
 
-  // Log activity
-  if (req.user) {
-    await ActivityLogger.logUserActivity("ban", bannedUser, req.user, {
-      reason: "No reason provided",
-      changes: "Account suspended by admin",
-    });
-  }
-
   res.status(200).json({
     status: "Success",
     message: "User banned successfully",
@@ -157,11 +148,6 @@ const unbanUser = expressAsyncHandler(async (req, res, next) => {
     });
   } catch (err) {
     // Email failure should not block the unban operation
-  }
-
-  // Log activity
-  if (req.user) {
-    await ActivityLogger.logUserActivity("unban", unbannedUser, req.user);
   }
 
   res.status(200).json({
@@ -220,15 +206,6 @@ const banManyUsers = expressAsyncHandler(async (req, res, next) => {
     bannedUsers.push({ id: bannedUser._id, name: bannedUser.name, email: bannedUser.email });
   }
 
-  // Log activity
-  if (req.user && bannedUsers.length > 0) {
-    await ActivityLogger.logBulkDeactivateActivity(
-      bannedUsers.length,
-      bannedUsers.map((u) => u.id),
-      req.user
-    );
-  }
-
   res.status(200).json({
     status: "Success",
     message: `${bannedUsers.length} user(s) banned successfully`,
@@ -241,39 +218,14 @@ const banManyUsers = expressAsyncHandler(async (req, res, next) => {
   });
 });
 
-const activateUser = expressAsyncHandler(async (req, res, next) => {
-  const userToActivate = await User.findById(req.params.id);
-
-  if (!userToActivate) {
-    return next(new endpointError(`There is no user with this ID`, 404));
-  }
-
-  const activatedUser = await User.findByIdAndUpdate(
-    req.params.id,
-    { active: true },
-    { new: true }
-  );
-
-  // Log activity
-  if (req.user) {
-    await ActivityLogger.logUserActivity("activate", activatedUser, req.user);
-  }
-
-  res.status(200).json({
-    status: "Success",
-    message: "User activated successfully",
-    data: activatedUser,
-  });
-});
-
-const activateManyUsers = expressAsyncHandler(async (req, res, next) => {
+const unbanManyUsers = expressAsyncHandler(async (req, res, next) => {
   const { ids } = req.body;
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return next(new endpointError("Please provide an array of user IDs", 400));
   }
 
-  const activatedUsers = [];
+  const unbannedUsers = [];
   const skippedUsers = [];
   const notFoundIds = [];
 
@@ -284,29 +236,39 @@ const activateManyUsers = expressAsyncHandler(async (req, res, next) => {
       continue;
     }
     if (user.active === true) {
-      skippedUsers.push({ id: user._id, name: user.name, reason: "User is already active" });
+      skippedUsers.push({ id: user._id, name: user.name, reason: "User is not banned" });
       continue;
     }
-    const activatedUser = await User.findByIdAndUpdate(
+
+    const unbannedUser = await User.findByIdAndUpdate(
       id,
       { active: true },
       { new: true }
     );
-    activatedUsers.push({ id: activatedUser._id, name: activatedUser.name, email: activatedUser.email });
-  }
 
-  if (req.user && activatedUsers.length > 0) {
-    await ActivityLogger.logBulkActivateActivity(
-      activatedUsers.length,
-      activatedUsers.map((u) => u.id),
-      req.user
-    );
+    // Send unban notification email (non-blocking)
+    try {
+      await sendEmail({
+        email: unbannedUser.email,
+        subject: `Your account has been reactivated`,
+        html: `<h1>Hello ${unbannedUser.name}</h1><p>Your account has been reactivated.</p><p>You can now log in and continue using our services.</p>`,
+      });
+    } catch (err) {
+      // Email failure should not block the unban operation
+    }
+
+    unbannedUsers.push({ id: unbannedUser._id, name: unbannedUser.name, email: unbannedUser.email });
   }
 
   res.status(200).json({
     status: "Success",
-    message: `${activatedUsers.length} user(s) activated successfully`,
-    data: { activatedCount: activatedUsers.length, activatedUsers, skippedUsers, notFoundIds },
+    message: `${unbannedUsers.length} user(s) unbanned successfully`,
+    data: {
+      unbannedCount: unbannedUsers.length,
+      unbannedUsers,
+      skippedUsers,
+      notFoundIds,
+    },
   });
 });
 
@@ -352,8 +314,7 @@ module.exports = {
   updateUser,
   updateUserPassword,
   banManyUsers,
-  activateUser,
-  activateManyUsers,
+  unbanManyUsers,
   banUser,
   unbanUser,
   getLoggedUserData,

@@ -12,8 +12,7 @@ const {
   uploadUserImage,
   processUserImage,
   banManyUsers,
-  activateManyUsers,
-  activateUser,
+  unbanManyUsers,
   banUser,
   unbanUser,
 } = require("../services/userServices");
@@ -26,7 +25,7 @@ const {
   updateLoggedUserDataValidator,
   updateLoggedUserPasswordValidator,
   banManyUsersValidator,
-  activateManyUsersValidator,
+  unbanManyUsersValidator,
   banUserValidator,
 } = require("../utils/validators/userValidators");
 const handleNullValues = require("../middlewares/handleNullValues");
@@ -72,20 +71,12 @@ router
     banManyUsersValidator,
     banManyUsers
   );
-  // NEW: Bulk activate route
 router
-  .route("/bulk-activate")
+  .route("/bulk-unban")
   .post(
     authServices.allowTo("admin"),
-    activateManyUsersValidator,
-    activateManyUsers
-  );
-router
-  .route("/:id/activate")
-  .put(
-    authServices.allowTo("admin"),
-    getUserValidator,
-    activateUser
+    unbanManyUsersValidator,
+    unbanManyUsers
   );
 
 router

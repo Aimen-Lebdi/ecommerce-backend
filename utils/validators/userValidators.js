@@ -125,7 +125,7 @@ const banManyUsersValidator = [
   validatorMiddleware,
 ];
 
-const activateManyUsersValidator = [
+const unbanManyUsersValidator = [
   checkSchema({
     ids: {
       isArray: {
@@ -139,14 +139,13 @@ const activateManyUsersValidator = [
           if (!Array.isArray(ids)) {
             throw new Error("IDs must be an array");
           }
-          
-          // Validate each ID is a valid MongoDB ObjectId
+
           for (const id of ids) {
             if (!id.match(/^[0-9a-fA-F]{24}$/)) {
               throw new Error(`Invalid user ID: ${id}`);
             }
           }
-          
+
           return true;
         },
       },
@@ -397,7 +396,7 @@ module.exports = {
   getUserValidator,
   updateUserValidator,
   banManyUsersValidator,
-  activateManyUsersValidator,
+  unbanManyUsersValidator,
   banUserValidator,
   updateUserPasswordValidator,
   updateLoggedUserPasswordValidator,
