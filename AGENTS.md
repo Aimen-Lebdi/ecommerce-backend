@@ -54,6 +54,15 @@ app.get("/example", expressAsyncHandler(async (req, res, next) => {
 - Critical variables checked at startup: `STRIPE_SECRET`, `MONGO_DB_URI`, `PORT`
 - Add any new config requirements to startup checks in `server.js`
 
+### Admin Account Creation
+- `npm run create-admin` runs the interactive CLI at `scripts/createAdmin.js` to create a `role: "admin"` user (prompts for name/email/hidden password, hashes via the model's `pre("save")` hook).
+- After creating the admin it sends a best-effort welcome email via `utils/sendEmail` (requires `EMAIL_HOST`/`EMAIL_PORT`/`EMAIL_USER`/`EMAIL_PASS`); if the email fails it only warns — the account is still created.
+- It loads the same context-specific env file as `server.js` (`.env.development` / `.env.production`), so the same command works in dev and prod.
+- Production: `NODE_ENV=production npm run create-admin` (Windows cmd: `set NODE_ENV=production && npm run create-admin`; PowerShell: `$env:NODE_ENV="production"; npm run create-admin`).
+- Docker: `docker-compose exec backend npm run create-admin`.
+- Fails if the email already exists; only warns (does not block) when other admins already exist.
+- Rotate/delete credentials after first login on a production box.
+
 ### API Route Structure
 - All routes prefixed with `/api/`
 - Exception: Orders use `/api/v1/orders`, Analytics use `/api/v1/analytics`
