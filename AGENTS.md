@@ -70,10 +70,10 @@ app.get("/example", expressAsyncHandler(async (req, res, next) => {
 
 **Current routes:**
 - `/api/categories`, `/api/subcategories`, `/api/brands`
-- `/api/products`, `/api/reviews`
+- `/api/products`
 - `/api/users`, `/api/auth`
 - `/api/cart`, `/api/wishlist`
-- `/api/addresses`, `/api/coupons`
+- `/api/addresses`
 - `/api/v1/orders`, `/api/v1/analytics`
 - `/api/activities`
 

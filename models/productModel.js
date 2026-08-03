@@ -37,13 +37,6 @@ const productSchema = new mongoose.Schema(
       required: [true, "Product must have a price"],
       trim: true,
     },
-    priceAfterDiscount: {
-      type: Number,
-      validate: {
-        validator: (v) => typeof v === "number" && !isNaN(v),
-        message: "Price after discount must be a number",
-      },
-    },
     mainImage: {
       type: String,
       validate: {
@@ -99,24 +92,7 @@ const productSchema = new mongoose.Schema(
       },
       ref: "Brand",
       default: null,
-    },
-    rating: {
-      type: Number,
-      validate: {
-        validator: (v) => typeof v === "number" && !isNaN(v),
-        message: "Rating must be a number",
-      },
-      min: [1, "Rating must be at least 1"],
-      max: [5, "Rating must be at most 5"],
-    },
-    ratingsQuantity: {
-      type: Number,
-      validate: {
-        validator: (v) => typeof v === "number" && !isNaN(v),
-        message: "Ratings Quantity must be a number",
-      },
-      default: 0,
-    },
+    }
   },
   {
     timestamps: true,

@@ -167,13 +167,6 @@ const detectChanges = (original, updated, config) => {
     );
   }
 
-  // Check discount changes (for coupons)
-  if (original.discount !== undefined && original.discount !== updated.discount) {
-    changes.push(
-      `discount changed from ${original.discount}% to ${updated.discount}%`
-    );
-  }
-
   // Check active status (for users)
   if (original.active !== undefined && original.active !== updated.active) {
     changes.push(
