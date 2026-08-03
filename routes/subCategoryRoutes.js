@@ -6,7 +6,6 @@ const {
   getOneSubCategory,
   updateSubCategory,
   deleteSubCategory,
-  deleteAllSubCategories,
   uploadSubCategoryImage,
   processSubCategoryImage,
   fromParamsToBody,
@@ -19,7 +18,6 @@ const {
   getOneSubCategoryValidator,
   updateSubCategoryValidator,
   deleteSubCategoryValidator,
-  deleteAllSubCategoriesValidator,
   deleteManySubCategoriesValidator,
 } = require("../utils/validators/subCategoryValidators");
 const { protectRoute, allowTo, optionalAuth } = require("../services/authServices");
