@@ -196,10 +196,10 @@ const checkoutSession = asyncHandler(async (req, res, next) => {
   const totalOrderPrice = cartPrice + shippingPrice;
 
   const shippingAddress = {
-    details: req.body.shippingAddress?.details || "",
-    phone: req.body.shippingAddress?.phone || "",
     wilaya: req.body.shippingAddress?.wilaya || "",
     dayra: req.body.shippingAddress?.dayra || "",
+    baladiya: req.body.shippingAddress?.baladiya || "",
+    phone: req.body.shippingAddress?.phone || "",
   };
 
   const order = await create({
@@ -268,10 +268,10 @@ const createCardOrder = async (session) => {
   const orderPrice = session.amount_total / 100;
 
   const shippingAddress = {
-    details: session.metadata.shippingDetails,
-    phone: session.metadata.shippingPhone,
     wilaya: session.metadata.shippingWilaya,
     dayra: session.metadata.shippingDayra,
+    baladiya: session.metadata.shippingBaladiya,
+    phone: session.metadata.shippingPhone,
   };
 
   const cart = await findById(cartId);

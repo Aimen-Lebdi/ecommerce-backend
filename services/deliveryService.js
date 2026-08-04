@@ -37,7 +37,7 @@ class DeliveryService {
         order_id: order._id.toString(),
         customer_name: order.user.name,
         customer_phone: order.shippingAddress.phone || order.user.phone,
-        customer_address: order.shippingAddress.details,
+        customer_address: order.shippingAddress.baladiya,
         wilaya: order.shippingAddress.wilaya,
         product_list: productList,
         price: order.totalOrderPrice,

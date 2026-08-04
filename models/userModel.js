@@ -103,11 +103,25 @@ const userSchema = mongoose.Schema(
     ],
     addresses: [
       {
-        id: { type: mongoose.Schema.Types.ObjectId },
         wilaya: String,
         dayra: String,
-        details: String,
-        phone: String,
+        baladiya: String,
+        isDefault: {
+          type: Boolean,
+          default: false,
+        },
+      },
+    ],
+    phones: [
+      {
+        phone: {
+          type: String,
+          trim: true,
+        },
+        isDefault: {
+          type: Boolean,
+          default: false,
+        },
       },
     ],
   },

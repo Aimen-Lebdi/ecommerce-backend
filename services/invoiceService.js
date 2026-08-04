@@ -198,10 +198,10 @@ class InvoiceService {
       font: boldFont,
     });
 
-    const shippingDetails = order.shippingAddress?.details || "N/A";
+    const shippingBaladiya = order.shippingAddress?.baladiya || "N/A";
     const maxShippingWidth = 200;
     const shippingLines = this.wrapText(
-      shippingDetails,
+      shippingBaladiya,
       maxShippingWidth,
       regularFont,
       9

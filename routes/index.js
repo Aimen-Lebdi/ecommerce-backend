@@ -6,6 +6,7 @@ const userRoutes = require("./userRoutes");
 const authRoutes = require("./authRoutes");
 const wishlistRoutes = require("./wishlistRoutes");
 const addressesRoutes = require("./addressesRoutes");
+const phonesRoutes = require("./phonesRoutes");
 const cartRoutes = require("./cartRoutes");
 const orderRoutes = require("./orderRoutes");
 const activityRoutes = require("./activityRoutes");
@@ -19,6 +20,7 @@ const mountRoutes = (app) => {
   app.use("/api/auth", authRoutes);
   app.use("/api/wishlist", wishlistRoutes);
   app.use("/api/addresses", addressesRoutes);
+  app.use("/api/phones", phonesRoutes);
   app.use("/api/cart", cartRoutes);
   app.use("/api/v1/orders", orderRoutes);
   app.use("/api/activities", activityRoutes);
