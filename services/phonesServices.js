@@ -36,10 +36,25 @@ exports.addPhone = expressAsyncHandler(async (req, res, next) => {
   // its own _id), so skip when the number is already saved.
   const alreadyExists = user.phones.some((p) => p.phone === req.body.phone);
 
+  // Labels are unique per type, case-insensitive. Legacy rows (no label) are
+  // skipped so they never block a new entry.
+  const labelCollision = user.phones.some(
+    (p) => p.label && p.label.toLowerCase() === req.body.label.toLowerCase()
+  );
+  if (labelCollision) {
+    return next(
+      new endpointError(
+        "Label already exists. Please choose a different label.",
+        400
+      )
+    );
+  }
+
   let updatedUser = user;
   if (!alreadyExists) {
     // The very first saved phone automatically becomes the default.
     const phone = {
+      label: req.body.label,
       phone: req.body.phone,
       isDefault: user.phones.length === 0,
     };
@@ -68,25 +83,12 @@ exports.addPhone = expressAsyncHandler(async (req, res, next) => {
 // @route   PUT /api/phones/:phoneId
 // @access  Protected/User
 exports.updatePhone = expressAsyncHandler(async (req, res, next) => {
-  // Positional $set => only the matched phone subdocument is updated.
-  const setFields = {};
-  if (req.body.phone !== undefined) setFields["phones.$.phone"] = req.body.phone;
+  const user = await User.findById(req.user._id);
 
-  let user;
-  if (Object.keys(setFields).length > 0) {
-    user = await User.findOneAndUpdate(
-      { _id: req.user._id, "phones._id": req.params.phoneId },
-      { $set: setFields },
-      { new: true }
-    );
-  } else {
-    user = await User.findOne({
-      _id: req.user._id,
-      "phones._id": req.params.phoneId,
-    });
-  }
-
-  if (!user) {
+  const targetPhone = user.phones.find(
+    (p) => p._id.toString() === req.params.phoneId
+  );
+  if (!targetPhone) {
     return next(
       new endpointError(
         `There is no phone with this ID: ${req.params.phoneId}`,
@@ -95,12 +97,45 @@ exports.updatePhone = expressAsyncHandler(async (req, res, next) => {
     );
   }
 
+  // Labels are unique per type, case-insensitive; exclude the entry being
+  // edited so re-saving its own label (or a case variant) is allowed.
+  if (req.body.label !== undefined) {
+    const labelCollision = user.phones.some(
+      (p) =>
+        p._id.toString() !== req.params.phoneId &&
+        p.label &&
+        p.label.toLowerCase() === req.body.label.toLowerCase()
+    );
+    if (labelCollision) {
+      return next(
+        new endpointError(
+          "Label already exists. Please choose a different label.",
+          400
+        )
+      );
+    }
+  }
+
+  // Positional $set => only the matched phone subdocument is updated.
+  const setFields = {};
+  if (req.body.phone !== undefined) setFields["phones.$.phone"] = req.body.phone;
+  if (req.body.label !== undefined) setFields["phones.$.label"] = req.body.label;
+
+  let updatedUser = user;
+  if (Object.keys(setFields).length > 0) {
+    updatedUser = await User.findOneAndUpdate(
+      { _id: req.user._id, "phones._id": req.params.phoneId },
+      { $set: setFields },
+      { new: true }
+    );
+  }
+
   // Optional isDefault flag keeps the single-default invariant.
   if (req.body.isDefault !== undefined) {
     if (req.body.isDefault === true) {
-      user = await promoteToDefault(req.user._id, req.params.phoneId);
+      updatedUser = await promoteToDefault(req.user._id, req.params.phoneId);
     } else {
-      user = await User.findOneAndUpdate(
+      updatedUser = await User.findOneAndUpdate(
         { _id: req.user._id, "phones._id": req.params.phoneId },
         { $set: { "phones.$.isDefault": false } },
         { new: true }
@@ -111,7 +146,7 @@ exports.updatePhone = expressAsyncHandler(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     message: "Phone updated successfully.",
-    data: user.phones,
+    data: updatedUser.phones,
   });
   next();
 });

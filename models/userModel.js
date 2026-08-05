@@ -103,6 +103,12 @@ const userSchema = mongoose.Schema(
     ],
     addresses: [
       {
+        label: {
+          type: String,
+          required: [true, "Label is required"],
+          trim: true,
+          maxlength: [30, "Label must be at most 30 characters"],
+        },
         wilaya: String,
         dayra: String,
         baladiya: String,
@@ -114,6 +120,12 @@ const userSchema = mongoose.Schema(
     ],
     phones: [
       {
+        label: {
+          type: String,
+          required: [true, "Label is required"],
+          trim: true,
+          maxlength: [30, "Label must be at most 30 characters"],
+        },
         phone: {
           type: String,
           trim: true,

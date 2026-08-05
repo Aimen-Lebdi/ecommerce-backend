@@ -14,6 +14,15 @@ const phoneIdSchema = {
 // --------------------------------------------------
 const addPhoneValidator = [
   checkSchema({
+    label: {
+      notEmpty: { errorMessage: "Label is required" },
+      isString: { errorMessage: "Label must be a string" },
+      isLength: {
+        options: { max: 30 },
+        errorMessage: "Label must be at most 30 characters",
+      },
+      trim: true,
+    },
     phone: {
       notEmpty: { errorMessage: "Phone number is required" },
       isMobilePhone: {
@@ -36,6 +45,16 @@ const addPhoneValidator = [
 const updatePhoneValidator = [
   checkSchema({
     ...phoneIdSchema,
+    label: {
+      optional: true,
+      isString: { errorMessage: "Label must be a string" },
+      notEmpty: { errorMessage: "Label must not be empty" },
+      isLength: {
+        options: { max: 30 },
+        errorMessage: "Label must be at most 30 characters",
+      },
+      trim: true,
+    },
     phone: {
       optional: true,
       isMobilePhone: {

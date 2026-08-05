@@ -295,15 +295,10 @@ const updateLoggedUserPassword = expressAsyncHandler(async (req, res, next) => {
 });
 
 const updateLoggedUserData = expressAsyncHandler(async (req, res, next) => {
-  // Build the update object explicitly so `phone` is only set when provided
-  // (keeps existing name/image updates untouched for non-phone requests).
   const updateData = {
     name: req.body.name,
     image: req.body.image,
   };
-  if (req.body.phone !== undefined) {
-    updateData.phone = req.body.phone;
-  }
 
   const updatedUser = await User.findByIdAndUpdate(
     req.user._id,

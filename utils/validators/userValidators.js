@@ -387,13 +387,6 @@ const updateLoggedUserDataValidator = [
     },
     // NOTE: email is not editable by logged users via this endpoint.
     // Admin updateUser endpoint handles email changes.
-    phone: {
-      optional: true,
-      isMobilePhone: {
-        options: ["ar-DZ"],
-        errorMessage: "Invalid phone number format",
-      },
-    },
   }),
   validatorMiddleware,
 ];

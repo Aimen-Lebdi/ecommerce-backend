@@ -43,10 +43,25 @@ exports.addAddress = expressAsyncHandler(async (req, res, next) => {
       a.baladiya === req.body.baladiya
   );
 
+  // Labels are unique per type, case-insensitive. Legacy rows (no label) are
+  // skipped so they never block a new entry.
+  const labelCollision = user.addresses.some(
+    (a) => a.label && a.label.toLowerCase() === req.body.label.toLowerCase()
+  );
+  if (labelCollision) {
+    return next(
+      new endpointError(
+        "Label already exists. Please choose a different label.",
+        400
+      )
+    );
+  }
+
   let updatedUser = user;
   if (!alreadyExists) {
     // The very first saved address automatically becomes the default.
     const address = {
+      label: req.body.label,
       wilaya: req.body.wilaya,
       dayra: req.body.dayra,
       baladiya: req.body.baladiya,
@@ -77,29 +92,12 @@ exports.addAddress = expressAsyncHandler(async (req, res, next) => {
 // @route   PUT /api/v1/addresses/:addressId
 // @access  Protected/User
 exports.updateAddress = expressAsyncHandler(async (req, res, next) => {
-  // Positional $set => only the matched address subdocument is updated.
-  const setFields = {};
-  if (req.body.wilaya !== undefined)
-    setFields["addresses.$.wilaya"] = req.body.wilaya;
-  if (req.body.dayra !== undefined) setFields["addresses.$.dayra"] = req.body.dayra;
-  if (req.body.baladiya !== undefined)
-    setFields["addresses.$.baladiya"] = req.body.baladiya;
+  const user = await User.findById(req.user._id);
 
-  let user;
-  if (Object.keys(setFields).length > 0) {
-    user = await User.findOneAndUpdate(
-      { _id: req.user._id, "addresses._id": req.params.addressId },
-      { $set: setFields },
-      { new: true }
-    );
-  } else {
-    user = await User.findOne({
-      _id: req.user._id,
-      "addresses._id": req.params.addressId,
-    });
-  }
-
-  if (!user) {
+  const targetAddress = user.addresses.find(
+    (a) => a._id.toString() === req.params.addressId
+  );
+  if (!targetAddress) {
     return next(
       new endpointError(
         `There is no address with this ID: ${req.params.addressId}`,
@@ -108,12 +106,50 @@ exports.updateAddress = expressAsyncHandler(async (req, res, next) => {
     );
   }
 
+  // Labels are unique per type, case-insensitive; exclude the entry being
+  // edited so re-saving its own label (or a case variant) is allowed.
+  if (req.body.label !== undefined) {
+    const labelCollision = user.addresses.some(
+      (a) =>
+        a._id.toString() !== req.params.addressId &&
+        a.label &&
+        a.label.toLowerCase() === req.body.label.toLowerCase()
+    );
+    if (labelCollision) {
+      return next(
+        new endpointError(
+          "Label already exists. Please choose a different label.",
+          400
+        )
+      );
+    }
+  }
+
+  // Positional $set => only the matched address subdocument is updated.
+  const setFields = {};
+  if (req.body.wilaya !== undefined)
+    setFields["addresses.$.wilaya"] = req.body.wilaya;
+  if (req.body.dayra !== undefined) setFields["addresses.$.dayra"] = req.body.dayra;
+  if (req.body.baladiya !== undefined)
+    setFields["addresses.$.baladiya"] = req.body.baladiya;
+  if (req.body.label !== undefined)
+    setFields["addresses.$.label"] = req.body.label;
+
+  let updatedUser = user;
+  if (Object.keys(setFields).length > 0) {
+    updatedUser = await User.findOneAndUpdate(
+      { _id: req.user._id, "addresses._id": req.params.addressId },
+      { $set: setFields },
+      { new: true }
+    );
+  }
+
   // Optional isDefault flag keeps the single-default invariant.
   if (req.body.isDefault !== undefined) {
     if (req.body.isDefault === true) {
-      user = await promoteToDefault(req.user._id, req.params.addressId);
+      updatedUser = await promoteToDefault(req.user._id, req.params.addressId);
     } else {
-      user = await User.findOneAndUpdate(
+      updatedUser = await User.findOneAndUpdate(
         { _id: req.user._id, "addresses._id": req.params.addressId },
         { $set: { "addresses.$.isDefault": false } },
         { new: true }
@@ -124,7 +160,7 @@ exports.updateAddress = expressAsyncHandler(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     message: "Address updated successfully.",
-    data: user.addresses,
+    data: updatedUser.addresses,
   });
   next();
 });

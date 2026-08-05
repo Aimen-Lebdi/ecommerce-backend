@@ -14,6 +14,15 @@ const addressIdSchema = {
 // --------------------------------------------------
 const addAddressValidator = [
   checkSchema({
+    label: {
+      notEmpty: { errorMessage: "Label is required" },
+      isString: { errorMessage: "Label must be a string" },
+      isLength: {
+        options: { max: 30 },
+        errorMessage: "Label must be at most 30 characters",
+      },
+      trim: true,
+    },
     wilaya: {
       notEmpty: { errorMessage: "Wilaya is required" },
       isString: { errorMessage: "Wilaya must be a string" },
@@ -43,6 +52,16 @@ const addAddressValidator = [
 const updateAddressValidator = [
   checkSchema({
     ...addressIdSchema,
+    label: {
+      optional: true,
+      isString: { errorMessage: "Label must be a string" },
+      notEmpty: { errorMessage: "Label must not be empty" },
+      isLength: {
+        options: { max: 30 },
+        errorMessage: "Label must be at most 30 characters",
+      },
+      trim: true,
+    },
     wilaya: {
       optional: true,
       isString: { errorMessage: "Wilaya must be a string" },
