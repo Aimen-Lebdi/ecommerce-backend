@@ -2,11 +2,27 @@ const axios = require("axios");
 const Order = require("../models/orderModel");
 
 // Configuration
+// M3: Fixed broken default URL (was .../api/api/v1/)
 const DELIVERY_API_URL =
-  process.env.DELIVERY_API_URL || "http://localhost:3001/api/api/v1/";
+  process.env.DELIVERY_API_URL || "http://localhost:3001/api/v1";
 const WEBHOOK_URL =
   process.env.DELIVERY_WEBHOOK_URL ||
   "http://localhost:5000/api/v1/orders/delivery/webhook";
+
+// M3: Ordered delivery flow — statuses may only move forward along this list.
+// Indexes are used to reject downgrades (e.g. shipped -> confirmed).
+const DELIVERY_FLOW = [
+  "pending",
+  "confirmed",
+  "shipped",
+  "in_transit",
+  "out_for_delivery",
+  "delivered",
+  "completed",
+  "failed",
+  "returned",
+  "cancelled",
+];
 
 class DeliveryService {
   // Create shipment with delivery agency (call after order is confirmed)
@@ -82,8 +98,11 @@ class DeliveryService {
       }
 
       // Map delivery agency statuses to your order statuses
+      // M3: pending_pickup -> "shipped" (the parcel was created, so the order
+      // is already with the agency). Previously mapped to "confirmed", which
+      // regressed a shipped order back to confirmed.
       const statusMap = {
-        pending_pickup: "confirmed",
+        pending_pickup: "shipped",
         collected: "shipped",
         in_transit: "in_transit",
         out_for_delivery: "out_for_delivery",
@@ -94,7 +113,26 @@ class DeliveryService {
         cancelled: "cancelled",
       };
 
-      const newStatus = statusMap[deliveryData.status] || order.deliveryStatus;
+      const mappedStatus = statusMap[deliveryData.status];
+      const newStatus = mappedStatus || order.deliveryStatus;
+
+      // M3: Never-downgrade guard — only move forward in the delivery flow.
+      if (mappedStatus) {
+        const currentIdx = DELIVERY_FLOW.indexOf(order.deliveryStatus);
+        const newIdx = DELIVERY_FLOW.indexOf(newStatus);
+        if (newIdx < currentIdx) {
+          console.log(
+            `⚠️ Skipping delivery status downgrade: ${order.deliveryStatus} -> ${newStatus}`
+          );
+          return order;
+        }
+      }
+
+      // M3: No-op when the status is unchanged (avoids history spam, e.g.
+      // a repeated pending_pickup webhook when the order is already shipped).
+      if (newStatus === order.deliveryStatus) {
+        return order;
+      }
 
       // Update order
       order.deliveryStatus = newStatus;

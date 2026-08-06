@@ -5,12 +5,21 @@ const ApiError = require("../utils/endpointError");
 const { post } = require("axios");
 const { logOrderActivity } = require("../socket/activityLogger");
 
-const { findOne } = require("../models/userModel");
-const { bulkWrite } = require("../models/productModel");
-const { findById, findByIdAndDelete } = require("../models/cartModel");
+const User = require("../models/userModel");
+const Product = require("../models/productModel");
+const Cart = require("../models/cartModel");
 const Order = require("../models/orderModel");
 const { createShipment, getTrackingInfo, updateOrderStatus } = require("./deliveryService");
 const { generateInvoice } = require("./invoiceService");
+
+// M0: Model helper aliases (were undefined, causing every order endpoint to 500)
+const create = (data) => Order.create(data);
+const _findOne = (query) => Order.findOne(query);
+const _findById = (id) => Order.findById(id);
+const findOne = (query) => User.findOne(query);
+const bulkWrite = (ops, opts) => Product.bulkWrite(ops, opts);
+const findById = (id) => Cart.findById(id);
+const findByIdAndDelete = (id) => Cart.findByIdAndDelete(id);
 
 const createCashOrder = asyncHandler(async (req, res, next) => {
   const shippingPrice = 500;
@@ -20,6 +29,11 @@ const createCashOrder = asyncHandler(async (req, res, next) => {
     return next(
       new ApiError(`There is no such cart with id ${req.params.cartId}`, 404)
     );
+  }
+
+  // M1: Cart ownership guard
+  if (cart.user.toString() !== req.user._id.toString()) {
+    return next(new ApiError("This cart does not belong to you", 403));
   }
 
   const cartPrice = cart.totalPriceAfterDiscount
@@ -74,17 +88,19 @@ const createCashOrder = asyncHandler(async (req, res, next) => {
 
 const handlePaymentCaptured = async (charge) => {
   try {
+    // M2: Match by payment_intent, not total price (total price matching
+    // corrupts the wrong order when two orders share the same amount).
     const order = await _findOne({
-      totalOrderPrice: charge.amount / 100,
-      paymentMethodType: "card",
-      paymentStatus: "authorized",
-    }).sort({ createdAt: -1 });
+      stripePaymentIntentId: charge.payment_intent,
+    });
 
     if (!order) return;
 
-    order.paymentStatus = "confirmed";
-    order.isPaid = true;
-    order.paidAt = new Date();
+    if (!order.isPaid) {
+      order.paymentStatus = "confirmed";
+      order.isPaid = true;
+      order.paidAt = new Date();
+    }
     order.statusHistory.push({
       status: "payment_captured",
       note: `Payment captured by Stripe. Charge ID: ${charge.id}`,
@@ -100,10 +116,10 @@ const handlePaymentCaptured = async (charge) => {
 
 const handlePaymentRefunded = async (charge) => {
   try {
+    // M2: Match by payment_intent so refunds always land on the right order.
     const order = await _findOne({
-      totalOrderPrice: charge.amount / 100,
-      paymentMethodType: "card",
-    }).sort({ createdAt: -1 });
+      stripePaymentIntentId: charge.payment_intent,
+    });
 
     if (!order) return;
 
@@ -125,6 +141,28 @@ const handlePaymentRefunded = async (charge) => {
 const filterOrderForLoggedUser = asyncHandler(async (req, res, next) => {
   // Everyone (admin or user) sees only their own orders
   req.filterObj = { user: req.user._id };
+  next();
+});
+
+// M1: Load the order and ensure the requester owns it (or is an admin).
+const restrictOrderAccess = asyncHandler(async (req, res, next) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    return next(
+      new ApiError(`There is no such order with id: ${req.params.id}`, 404)
+    );
+  }
+
+  const isOwner =
+    order.user && order.user._id.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === "admin";
+
+  if (!isOwner && !isAdmin) {
+    return next(new ApiError("You are not allowed to access this order", 403));
+  }
+
+  req.order = order;
   next();
 });
 
@@ -190,6 +228,11 @@ const checkoutSession = asyncHandler(async (req, res, next) => {
     );
   }
 
+  // M1: Ownership guard — a user may only checkout their own cart.
+  if (cart.user.toString() !== req.user._id.toString()) {
+    return next(new ApiError("This cart does not belong to you", 403));
+  }
+
   const cartPrice = cart.totalPriceAfterDiscount
     ? cart.totalPriceAfterDiscount
     : cart.totalCartPrice;
@@ -202,41 +245,9 @@ const checkoutSession = asyncHandler(async (req, res, next) => {
     phone: req.body.shippingAddress?.phone || "",
   };
 
-  const order = await create({
-    user: req.user._id,
-    cartItems: cart.cartItems,
-    shippingAddress,
-    totalOrderPrice,
-    paymentMethodType: "card",
-    paymentStatus: "authorized",
-    deliveryStatus: "pending",
-    isPaid: false,
-    statusHistory: [
-      {
-        status: "pending",
-        note: "Order created. Payment authorized by Stripe.",
-        updatedBy: "system",
-      },
-    ],
-  });
-
-  // Log activity
-  if (order && req.user) {
-    await logOrderActivity("create", order, req.user, {
-      paymentMethod: "card",
-      itemsCount: cart.cartItems.length,
-    });
-  }
-
-  const bulkOption = cart.cartItems.map((item) => ({
-    updateOne: {
-      filter: { _id: item.product },
-      update: { $inc: { quantity: -item.quantity, sold: +item.quantity } },
-    },
-  }));
-  await bulkWrite(bulkOption, {});
-  await findByIdAndDelete(req.params.cartId);
-
+  // M2 (Option B): NO order is created and NO stock is deducted here.
+  // The order is only created inside the `checkout.session.completed`
+  // webhook, so an abandoned session leaves no order and no stock change.
   const session = await stripe.checkout.sessions.create({
     line_items: [
       {
@@ -251,31 +262,40 @@ const checkoutSession = asyncHandler(async (req, res, next) => {
       },
     ],
     mode: "payment",
-    success_url: `http://localhost:5173/order-confirmation/${order._id}`,
-    cancel_url: `http://localhost:5173/checkout`,
+    success_url: `${process.env.FRONTEND_URL}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.FRONTEND_URL}/checkout`,
     customer_email: req.user.email,
-    client_reference_id: order._id.toString(),
+    client_reference_id: cart._id.toString(),
+    metadata: {
+      cartId: cart._id.toString(),
+      userId: req.user._id.toString(),
+      shippingWilaya: shippingAddress.wilaya,
+      shippingDayra: shippingAddress.dayra,
+      shippingBaladiya: shippingAddress.baladiya,
+      shippingPhone: shippingAddress.phone,
+    },
   });
-
-  order.stripeSessionId = session.id;
-  await order.save();
 
   res.status(200).json({ status: "success", session });
 });
 
 const createCardOrder = async (session) => {
-  const cartId = session.client_reference_id;
+  // M2: Resolve the cart from metadata (client_reference_id is the cart id).
+  const cartId = session.metadata?.cartId || session.client_reference_id;
   const orderPrice = session.amount_total / 100;
 
   const shippingAddress = {
-    wilaya: session.metadata.shippingWilaya,
-    dayra: session.metadata.shippingDayra,
-    baladiya: session.metadata.shippingBaladiya,
-    phone: session.metadata.shippingPhone,
+    wilaya: session.metadata?.shippingWilaya || "",
+    dayra: session.metadata?.shippingDayra || "",
+    baladiya: session.metadata?.shippingBaladiya || "",
+    phone: session.metadata?.shippingPhone || "",
   };
 
   const cart = await findById(cartId);
-  const user = await findOne({ email: session.customer_email });
+  let user = await findOne({ _id: session.metadata?.userId });
+  if (!user && session.customer_email) {
+    user = await findOne({ email: session.customer_email });
+  }
 
   if (!cart || !user) {
     console.error("Cart or user not found for session:", session.id);
@@ -288,14 +308,16 @@ const createCardOrder = async (session) => {
     shippingAddress,
     totalOrderPrice: orderPrice,
     paymentMethodType: "card",
-    paymentStatus: "authorized",
+    paymentStatus: "confirmed",
     deliveryStatus: "pending",
-    isPaid: false,
+    isPaid: true,
+    paidAt: new Date(),
     stripeSessionId: session.id,
+    stripePaymentIntentId: session.payment_intent || undefined,
     statusHistory: [
       {
         status: "pending",
-        note: "Order created. Payment authorized by Stripe. Waiting for seller confirmation.",
+        note: "Order created from Stripe checkout. Payment received.",
         updatedBy: "system",
       },
     ],
@@ -520,7 +542,8 @@ const simulateDelivery = asyncHandler(async (req, res, next) => {
 });
 
 const cancelOrder = asyncHandler(async (req, res, next) => {
-  const order = await _findById(req.params.id);
+  // M1: Reuse the order loaded by restrictOrderAccess when present.
+  const order = req.order || (await _findById(req.params.id));
 
   if (!order) {
     return next(
@@ -528,6 +551,7 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
+  // M4: Reject double-cancellation / cancelling once shipped.
   if (!["pending", "confirmed"].includes(order.deliveryStatus)) {
     return next(
       new ApiError(
@@ -537,14 +561,54 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  if (
+  // M4: Restore product stock and decrement sold count (floored at 0).
+  if (order.cartItems && order.cartItems.length > 0) {
+    for (const item of order.cartItems) {
+      await Product.updateOne(
+        { _id: item.product },
+        [
+          {
+            $set: {
+              quantity: { $add: ["$quantity", item.quantity] },
+              sold: { $max: [{ $subtract: ["$sold", item.quantity] }, 0] },
+            },
+          },
+        ]
+      );
+    }
+  }
+
+  // M4: For card orders with captured/authorized payment, issue a real
+  // Stripe refund (best-effort; failures are logged, not fatal).
+  const shouldRefund =
     order.paymentMethodType === "card" &&
-    order.paymentStatus === "authorized"
-  ) {
+    ["authorized", "confirmed"].includes(order.paymentStatus);
+
+  if (shouldRefund) {
+    let refundResult = null;
+    if (order.stripePaymentIntentId) {
+      try {
+        refundResult = await stripe.refunds.create({
+          payment_intent: order.stripePaymentIntentId,
+        });
+        console.log(
+          `↩️ Stripe refund created for order ${order._id}: ${refundResult.id}`
+        );
+      } catch (error) {
+        console.error(
+          `Failed to refund Stripe payment for order ${order._id}:`,
+          error.message
+        );
+      }
+    }
+
     order.paymentStatus = "refunded";
+    order.isPaid = false;
     order.statusHistory.push({
       status: "payment_refunded",
-      note: "Payment authorization released due to cancellation",
+      note: refundResult
+        ? `Payment refunded via Stripe. Refund ID: ${refundResult.id}`
+        : "Payment marked as refunded due to cancellation",
       updatedBy: req.user?.role === "admin" ? "seller" : "customer",
     });
   }
@@ -621,7 +685,8 @@ const confirmCardOrder = asyncHandler(async (req, res, next) => {
 const downloadInvoice = asyncHandler(async (req, res, next) => {
   const order = await _findById(req.params.id)
     .populate("user", "name email phone")
-    .populate("cartItems.product", "title imageCover");
+    // Product model exposes `name`/`mainImage` (not `title`/`imageCover`)
+    .populate("cartItems.product", "name mainImage");
 
   if (!order) {
     return next(
@@ -631,7 +696,7 @@ const downloadInvoice = asyncHandler(async (req, res, next) => {
 
   if (
     req.user.role !== "admin" &&
-    order.user._id.toString() !== req.user._id.toString()
+    order.user?._id?.toString() !== req.user._id.toString()
   ) {
     return next(
       new ApiError("You are not authorized to download this invoice", 403)
@@ -655,6 +720,7 @@ module.exports = {
   filterOrderForLoggedUser,
   findAllOrders,
   findSpecificOrder,
+  restrictOrderAccess,
   updateOrderToPaid,
   updateOrderToDelivered,
   checkoutSession,

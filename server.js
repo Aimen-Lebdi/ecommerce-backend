@@ -25,6 +25,26 @@ console.log(`✅ PORT: ${process.env.PORT}`);
 console.log(`✅ MONGO_DB_URI: ${process.env.MONGO_DB_URI ? "Loaded" : "Missing"}`);
 console.log(`✅ STRIPE_SECRET: ${process.env.STRIPE_SECRET ? "Loaded (length: " + process.env.STRIPE_SECRET.length + ")" : "Missing"}`);
 
+// M5: Warn when the webhook secret is not a real whsec_ signing secret
+if (process.env.STRIPE_WEBHOOK_SECRET) {
+  if (process.env.STRIPE_WEBHOOK_SECRET.startsWith("pk_test_")) {
+    console.warn(
+      "⚠️ STRIPE_WEBHOOK_SECRET starts with 'pk_test_' — that's a publishable key, NOT a webhook signing secret. Webhook signature validation will fail. Run `stripe listen --forward-to localhost:5000/webhook-checkout` and paste the whsec_ value."
+    );
+  } else if (!process.env.STRIPE_WEBHOOK_SECRET.startsWith("whsec_")) {
+    console.warn(
+      `⚠️ STRIPE_WEBHOOK_SECRET does not start with 'whsec_' — webhook signature validation may fail (${process.env.STRIPE_WEBHOOK_SECRET.slice(
+        0,
+        8
+      )}...).`
+    );
+  } else {
+    console.log("✅ STRIPE_WEBHOOK_SECRET: Loaded (whsec_)");
+  }
+} else {
+  console.warn("⚠️ STRIPE_WEBHOOK_SECRET is not defined — Stripe webhooks will be rejected.");
+}
+
 // Exit if critical variables are missing
 if (!process.env.STRIPE_SECRET) {
   console.error("❌ CRITICAL: STRIPE_SECRET is not defined!");

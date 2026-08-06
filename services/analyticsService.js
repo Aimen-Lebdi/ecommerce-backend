@@ -346,7 +346,7 @@ const getBestOrders = async (limit = 5) => {
     return orders.map((order) => ({
       id: order._id.toString().substring(18, 24).toUpperCase(),
       customer: order.user?.name || "Unknown",
-      total: `$${order.totalOrderPrice.toFixed(2)}`,
+      total: `${order.totalOrderPrice.toFixed(2)} DZD`,
       date: order.createdAt.toISOString().split("T")[0],
     }));
   } catch (error) {
@@ -390,7 +390,7 @@ const getTopCustomers = async (limit = 5) => {
     return topCustomers.map((customer) => ({
       name: customer.userDetails?.name || "Unknown",
       products: customer.totalOrders,
-      revenue: `$${customer.totalRevenue.toFixed(2)}`,
+      revenue: `${customer.totalRevenue.toFixed(2)} DZD`,
     }));
   } catch (error) {
     throw new Error(`Error getting top customers: ${error.message}`);
@@ -434,7 +434,7 @@ const getBestProducts = async (limit = 5) => {
     return bestProducts.map((product) => ({
       name: product.productDetails?.name || "Unknown Product",
       sold: product.sold,
-      revenue: `$${product.revenue.toFixed(2)}`,
+      revenue: `${product.revenue.toFixed(2)} DZD`,
     }));
   } catch (error) {
     throw new Error(`Error getting best products: ${error.message}`);

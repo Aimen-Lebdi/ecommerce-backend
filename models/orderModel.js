@@ -46,6 +46,12 @@ const orderSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    // M2: Stripe PaymentIntent id used to match webhook events (charge.succeeded /
+    // charge.refunded) to the correct order instead of matching by total price.
+    stripePaymentIntentId: {
+      type: String,
+      index: true,
+    },
     deliveryStatus: {
       type: String,
       enum: [

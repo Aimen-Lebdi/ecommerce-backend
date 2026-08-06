@@ -1,5 +1,15 @@
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 
+// M5: Store info driven by environment variables (no more hardcoded placeholders)
+const STORE_INFO = {
+  name: process.env.STORE_NAME || "CliQo Store",
+  address: process.env.STORE_ADDRESS || "123 Business Street",
+  city: process.env.STORE_CITY || "Algiers, Algeria",
+  phone: process.env.STORE_PHONE || "+213 000 000 000",
+  email: process.env.STORE_EMAIL || "support@cliqo.store",
+};
+const CURRENCY = "DA";
+
 class InvoiceService {
   /**
    * Generate invoice PDF for an order using pdf-lib
@@ -15,13 +25,14 @@ class InvoiceService {
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Company/Store Information
+    // Company/Store Information (M5: from env/constants) — sanitized for the
+    // WinAnsi-only standard fonts (non-Latin chars would make drawText throw).
     const storeInfo = {
-      name: "Your Store Name",
-      address: "123 Business Street",
-      city: "City, State 12345",
-      phone: "+1 (800) 123-4567",
-      email: "support@yourstore.com",
+      name: InvoiceService.sanitize(STORE_INFO.name) || "CliQo Store",
+      address: InvoiceService.sanitize(STORE_INFO.address),
+      city: InvoiceService.sanitize(STORE_INFO.city),
+      phone: InvoiceService.sanitize(STORE_INFO.phone),
+      email: InvoiceService.sanitize(STORE_INFO.email),
     };
 
     let yPosition = height - 50;
@@ -108,7 +119,7 @@ class InvoiceService {
       size: 10,
       font: regularFont,
     });
-    page.drawText(this.formatDate(order.createdAt), {
+    page.drawText(InvoiceService.formatDate(order.createdAt), {
       x: 150,
       y: invoiceInfoY - 15,
       size: 10,
@@ -150,7 +161,7 @@ class InvoiceService {
       size: 10,
       font: regularFont,
     });
-    page.drawText(order.paymentStatus.toUpperCase(), {
+    page.drawText((order.paymentStatus || "pending").toUpperCase(), {
       x: 150,
       y: invoiceInfoY - 60,
       size: 10,
@@ -166,10 +177,10 @@ class InvoiceService {
       font: boldFont,
     });
     
-    // FIX: Add defensive checks for user data
-    const userName = order.user?.name || "N/A";
-    const userEmail = order.user?.email || "N/A";
-    const userPhone = order.user?.phone || "N/A";
+    // FIX: Sanitize (WinAnsi fonts) + defensively guard user data
+    const userName = InvoiceService.sanitize(order.user?.name) || "N/A";
+    const userEmail = InvoiceService.sanitize(order.user?.email) || "N/A";
+    const userPhone = InvoiceService.sanitize(order.user?.phone) || "N/A";
     
     page.drawText(userName, {
       x: 320,
@@ -198,9 +209,10 @@ class InvoiceService {
       font: boldFont,
     });
 
-    const shippingBaladiya = order.shippingAddress?.baladiya || "N/A";
+    const shippingBaladiya =
+      InvoiceService.sanitize(order.shippingAddress?.baladiya) || "N/A";
     const maxShippingWidth = 200;
-    const shippingLines = this.wrapText(
+    const shippingLines = InvoiceService.wrapText(
       shippingBaladiya,
       maxShippingWidth,
       regularFont,
@@ -218,8 +230,8 @@ class InvoiceService {
       shippingY -= 12;
     });
 
-    const wilaya = order.shippingAddress?.wilaya || "N/A";
-    const dayra = order.shippingAddress?.dayra || "N/A";
+    const wilaya = InvoiceService.sanitize(order.shippingAddress?.wilaya) || "N/A";
+    const dayra = InvoiceService.sanitize(order.shippingAddress?.dayra) || "N/A";
     page.drawText(`${wilaya}, ${dayra}`, {
       x: 320,
       y: shippingY,
@@ -299,11 +311,11 @@ class InvoiceService {
         font: regularFont,
       });
 
-      // FIX: Handle missing product data
-      const productTitle = item.product?.title || "Product Unavailable";
+      // FIX: Product model uses `name` (not `title`); sanitize for the PDF font
+      const productName =
+        InvoiceService.sanitize(item.product?.name) || "Product Unavailable";
       const title =
-        productTitle.substring(0, 25) +
-        (productTitle.length > 25 ? "..." : "");
+        productName.substring(0, 25) + (productName.length > 25 ? "..." : "");
       
       page.drawText(title, {
         x: 150,
@@ -319,14 +331,14 @@ class InvoiceService {
         font: regularFont,
       });
 
-      page.drawText(`$${(item.price || 0).toFixed(2)}`, {
+      page.drawText(`${(item.price || 0).toFixed(2)} ${CURRENCY}`, {
         x: 410,
         y: yPosition,
         size: 9,
         font: regularFont,
       });
 
-      page.drawText(`$${itemTotal.toFixed(2)}`, {
+      page.drawText(`${itemTotal.toFixed(2)} ${CURRENCY}`, {
         x: 480,
         y: yPosition,
         size: 9,
@@ -334,7 +346,7 @@ class InvoiceService {
       });
 
       if (item.color) {
-        page.drawText(`Color: ${item.color}`, {
+        page.drawText(`Color: ${InvoiceService.sanitize(item.color)}`, {
           x: 150,
           y: yPosition - 12,
           size: 8,
@@ -371,7 +383,7 @@ class InvoiceService {
       size: 10,
       font: regularFont,
     });
-    page.drawText(`$${subtotal.toFixed(2)}`, {
+    page.drawText(`${subtotal.toFixed(2)} ${CURRENCY}`, {
       x: 490,
       y: yPosition,
       size: 10,
@@ -385,7 +397,7 @@ class InvoiceService {
       size: 10,
       font: regularFont,
     });
-    page.drawText(`$${shipping.toFixed(2)}`, {
+    page.drawText(`${shipping.toFixed(2)} ${CURRENCY}`, {
       x: 490,
       y: yPosition,
       size: 10,
@@ -399,7 +411,7 @@ class InvoiceService {
       size: 10,
       font: regularFont,
     });
-    page.drawText(`$${tax.toFixed(2)}`, {
+    page.drawText(`${tax.toFixed(2)} ${CURRENCY}`, {
       x: 490,
       y: yPosition,
       size: 10,
@@ -423,7 +435,7 @@ class InvoiceService {
       font: boldFont,
       color: rgb(1, 1, 1),
     });
-    page.drawText(`$${total.toFixed(2)}`, {
+    page.drawText(`${total.toFixed(2)} ${CURRENCY}`, {
       x: 480,
       y: yPosition,
       size: 12,
@@ -435,7 +447,7 @@ class InvoiceService {
     if (order.paymentMethodType === "cash" && order.codAmount) {
       yPosition -= 30;
       page.drawText(
-        `* Amount to be collected on delivery: $${order.codAmount.toFixed(2)}`,
+        `* Amount to be collected on delivery: ${order.codAmount.toFixed(2)} ${CURRENCY}`,
         {
           x: 50,
           y: yPosition,
@@ -456,7 +468,7 @@ class InvoiceService {
       color: rgb(0.4, 0.4, 0.4),
     });
 
-    page.drawText("For questions, contact: support@yourstore.com", {
+    page.drawText(`For questions, contact: ${storeInfo.email}`, {
       x: width / 2 - 110,
       y: footerY - 15,
       size: 8,
@@ -464,7 +476,7 @@ class InvoiceService {
       color: rgb(0.5, 0.5, 0.5),
     });
 
-    page.drawText(`Generated on ${this.formatDate(new Date())}`, {
+    page.drawText(`Generated on ${InvoiceService.formatDate(new Date())}`, {
       x: width / 2 - 70,
       y: footerY - 30,
       size: 8,
@@ -475,6 +487,28 @@ class InvoiceService {
     // Save and return
     const pdfBytes = await pdfDoc.save();
     return Buffer.from(pdfBytes);
+  }
+
+  /**
+   * Strip characters that the standard (WinAnsi) fonts cannot encode.
+   * pdf-lib's StandardFonts (Helvetica) throw when drawing non-Latin text
+   * (e.g. Arabic), which made invoice downloads 500. Keep printable ASCII +
+   * Latin-1 supplement (covers French accents); everything else -> "?".
+   * @param {*} text
+   * @returns {string}
+   */
+  static sanitize(text) {
+    if (text === null || text === undefined) return "";
+    return String(text)
+      .replace(/\r?\n/g, " ")
+      .split("")
+      .map((ch) => {
+        const code = ch.codePointAt(0);
+        if (code >= 0x20 && code <= 0x7e) return ch; // printable ASCII
+        if (code >= 0xa0 && code <= 0xff) return ch; // Latin-1 supplement
+        return "?";
+      })
+      .join("");
   }
 
   static formatDate(date) {

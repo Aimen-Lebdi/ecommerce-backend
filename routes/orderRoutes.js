@@ -10,6 +10,7 @@ const {
   confirmOrder, // NEW
   shipOrder, // NEW
   cancelOrder, // ADD THIS
+  restrictOrderAccess, // M1: ownership guard middleware
   getOrderTracking, // NEW
   simulateDelivery, // NEW (testing only)
   deliveryWebhook,
@@ -45,14 +46,17 @@ router.post(
 router.post(
   "/:cartId",
   authService.protectRoute,
-  authService.allowTo("user"),
+  authService.allowTo("user" ,"admin"),
   createCashOrder
 );
 
-// Get all orders
-router.get("/", authService.protectRoute,
-  authService.allowTo("user", "admin"),
-  findAllOrders);
+// Get all orders (admin only — regular users use /myOrders)
+router.get(
+  "/",
+  authService.protectRoute,
+  authService.allowTo("admin"),
+  findAllOrders
+);
 
 // Get all orders for specific user
 router.get("/myOrders", authService.protectRoute,
@@ -60,24 +64,52 @@ router.get("/myOrders", authService.protectRoute,
   filterOrderForLoggedUser,
   findAllOrders);
 
-// Get specific order
+// Get specific order (owner or admin only)
 router.get(
   "/:id",
   authService.protectRoute,
   authService.allowTo("user", "admin"),
+  restrictOrderAccess,
   findSpecificOrder
 );
 
-// COD Workflow endpoints
-router.put("/:id/confirm", confirmOrder); // Seller confirms order
-router.post("/:id/ship", shipOrder); // Create shipment with delivery agency
-router.get("/:id/tracking", authService.protectRoute, getOrderTracking); // Get tracking info
+// COD Workflow endpoints (admin only)
+router.put(
+  "/:id/confirm",
+  authService.protectRoute,
+  authService.allowTo("admin"),
+  confirmOrder
+); // Seller confirms order
+router.post(
+  "/:id/ship",
+  authService.protectRoute,
+  authService.allowTo("admin"),
+  shipOrder
+); // Create shipment with delivery agency
+router.get(
+  "/:id/tracking",
+  authService.protectRoute,
+  authService.allowTo("user", "admin"),
+  restrictOrderAccess,
+  getOrderTracking
+); // Get tracking info
 
-// ADD THESE THREE ROUTES:
-router.put("/:id/cancel", authService.protectRoute, cancelOrder);
+// Cancel order (owner or admin only)
+router.put(
+  "/:id/cancel",
+  authService.protectRoute,
+  authService.allowTo("user", "admin"),
+  restrictOrderAccess,
+  cancelOrder
+);
 
-// Testing endpoint
-router.post("/:id/simulate-delivery", simulateDelivery);
+// Testing endpoint (admin only — mock delivery flow stays usable in prod)
+router.post(
+  "/:id/simulate-delivery",
+  authService.protectRoute,
+  authService.allowTo("admin"),
+  simulateDelivery
+);
 
 router.put(
   "/:id/confirm-card",
