@@ -38,6 +38,12 @@ if (process.env.STRIPE_WEBHOOK_SECRET) {
         8
       )}...).`
     );
+  } else if (
+    process.env.STRIPE_WEBHOOK_SECRET.includes("REPLACE_WITH_REAL")
+  ) {
+    console.warn(
+      "⚠️ STRIPE_WEBHOOK_SECRET is still the placeholder (whsec_REPLACE_WITH_REAL_WEBHOOK_SECRET). Run `stripe listen --forward-to localhost:5000/webhook-checkout` and paste the real whsec_ value, otherwise the card webhook will reject with 400 and no card order will be created."
+    );
   } else {
     console.log("✅ STRIPE_WEBHOOK_SECRET: Loaded (whsec_)");
   }

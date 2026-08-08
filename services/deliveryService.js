@@ -43,7 +43,7 @@ class DeliveryService {
 
       // Prepare product list
       const productList = order.cartItems.map((item) => ({
-        name: item.product?.title || "Product",
+        name: item.product?.name || "Product",
         quantity: item.quantity,
         price: item.price,
       }));

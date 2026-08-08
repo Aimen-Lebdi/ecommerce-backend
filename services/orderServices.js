@@ -12,6 +12,10 @@ const Order = require("../models/orderModel");
 const { createShipment, getTrackingInfo, updateOrderStatus } = require("./deliveryService");
 const { generateInvoice } = require("./invoiceService");
 
+// M3: Single source of truth for the flat shipping fee (persisted on orders so
+// admin/confirmation subtotals compute as totalOrderPrice - shippingPrice).
+const SHIPPING_PRICE = 500;
+
 // M0: Model helper aliases (were undefined, causing every order endpoint to 500)
 const create = (data) => Order.create(data);
 const _findOne = (query) => Order.findOne(query);
@@ -22,7 +26,7 @@ const findById = (id) => Cart.findById(id);
 const findByIdAndDelete = (id) => Cart.findByIdAndDelete(id);
 
 const createCashOrder = asyncHandler(async (req, res, next) => {
-  const shippingPrice = 500;
+  const shippingPrice = SHIPPING_PRICE;
 
   const cart = await findById(req.params.cartId);
   if (!cart) {
@@ -46,6 +50,7 @@ const createCashOrder = asyncHandler(async (req, res, next) => {
     user: req.user._id,
     cartItems: cart.cartItems,
     shippingAddress: req.body.shippingAddress,
+    shippingPrice, // M3: persist so the admin subtotal (total - shipping) is correct
     totalOrderPrice,
     codAmount: totalOrderPrice,
     deliveryStatus: "pending",
@@ -88,6 +93,10 @@ const createCashOrder = asyncHandler(async (req, res, next) => {
 
 const handlePaymentCaptured = async (charge) => {
   try {
+    // M4: BACKSTOP ONLY — createCardOrder (on checkout.session.completed) is the
+    // single source of truth for payment capture: it already sets isPaid:true and
+    // paymentStatus:"confirmed". This handler only reconciles orders that somehow
+    // still have isPaid === false (e.g. legacy data); it is a no-op otherwise.
     // M2: Match by payment_intent, not total price (total price matching
     // corrupts the wrong order when two orders share the same amount).
     const order = await _findOne({
@@ -219,7 +228,7 @@ const updateOrderToDelivered = asyncHandler(async (req, res, next) => {
 });
 
 const checkoutSession = asyncHandler(async (req, res, next) => {
-  const shippingPrice = 500;
+  const shippingPrice = SHIPPING_PRICE;
 
   const cart = await findById(req.params.cartId);
   if (!cart) {
@@ -280,6 +289,17 @@ const checkoutSession = asyncHandler(async (req, res, next) => {
 });
 
 const createCardOrder = async (session) => {
+  // M1: Idempotency guard — Stripe retries webhooks that don't ack fast enough;
+  // stripeSessionId has a unique index, so a duplicate create would throw E11000
+  // and make the webhook 500 (which in turn triggers even more retries).
+  const existing = await _findOne({ stripeSessionId: session.id });
+  if (existing) {
+    console.log(
+      `✔️ Order ${existing._id} already exists for session ${session.id} — skipping duplicate`
+    );
+    return existing;
+  }
+
   // M2: Resolve the cart from metadata (client_reference_id is the cart id).
   const cartId = session.metadata?.cartId || session.client_reference_id;
   const orderPrice = session.amount_total / 100;
@@ -302,26 +322,46 @@ const createCardOrder = async (session) => {
     return;
   }
 
-  const order = await create({
-    user: user._id,
-    cartItems: cart.cartItems,
-    shippingAddress,
-    totalOrderPrice: orderPrice,
-    paymentMethodType: "card",
-    paymentStatus: "confirmed",
-    deliveryStatus: "pending",
-    isPaid: true,
-    paidAt: new Date(),
-    stripeSessionId: session.id,
-    stripePaymentIntentId: session.payment_intent || undefined,
-    statusHistory: [
-      {
-        status: "pending",
-        note: "Order created from Stripe checkout. Payment received.",
-        updatedBy: "system",
-      },
-    ],
-  });
+  // M1: Wrap the create so a concurrent duplicate webhook (race on the unique
+  // stripeSessionId index) returns the existing order instead of failing.
+  let order;
+  try {
+    order = await create({
+      user: user._id,
+      cartItems: cart.cartItems,
+      shippingAddress,
+      shippingPrice: SHIPPING_PRICE, // M3: persist so the admin subtotal is correct
+      totalOrderPrice: orderPrice,
+      paymentMethodType: "card",
+      // M1/M4: Payment is captured at checkout (Stripe mode:"payment"), so the
+      // order starts confirmed + paid. The admin "Confirm" button is a DELIVERY
+      // confirmation (pending -> confirmed), not a payment-capture step.
+      paymentStatus: "confirmed",
+      deliveryStatus: "pending",
+      isPaid: true,
+      paidAt: new Date(),
+      stripeSessionId: session.id,
+      stripePaymentIntentId: session.payment_intent || undefined,
+      statusHistory: [
+        {
+          status: "pending",
+          note: "Order created from Stripe checkout. Payment received.",
+          updatedBy: "system",
+        },
+      ],
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      const dup = await _findOne({ stripeSessionId: session.id });
+      if (dup) {
+        console.log(
+          `✔️ Duplicate session ${session.id} — reusing order ${dup._id}`
+        );
+        return dup;
+      }
+    }
+    throw error;
+  }
 
   if (order) {
     const bulkOption = cart.cartItems.map((item) => ({
@@ -537,7 +577,9 @@ const simulateDelivery = asyncHandler(async (req, res, next) => {
       data: response.data.data,
     });
   } catch (error) {
-    return next(new ApiError(`Simulation failed: ${error}`, 400));
+    return next(
+      new ApiError(`Simulation failed: ${error.message || error}`, 400)
+    );
   }
 });
 
@@ -578,39 +620,54 @@ const cancelOrder = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // M4: For card orders with captured/authorized payment, issue a real
-  // Stripe refund (best-effort; failures are logged, not fatal).
+  // M4: For card orders with captured/authorized payment, issue a real Stripe
+  // refund. Only mark paymentStatus "refunded" when the refund actually
+  // succeeded — never mark refunded when there is no PaymentIntent or the
+  // refund API call failed (that would silently lose money).
   const shouldRefund =
     order.paymentMethodType === "card" &&
-    ["authorized", "confirmed"].includes(order.paymentStatus);
+    ["authorized", "confirmed"].includes(order.paymentStatus) &&
+    order.isPaid;
 
   if (shouldRefund) {
-    let refundResult = null;
-    if (order.stripePaymentIntentId) {
+    const updatedBy = req.user?.role === "admin" ? "seller" : "customer";
+
+    if (!order.stripePaymentIntentId) {
+      console.warn(
+        `Cannot refund order ${order._id}: no stripePaymentIntentId. Payment NOT marked as refunded.`
+      );
+      order.statusHistory.push({
+        status: "refund_failed",
+        note: "Refund could not be issued: missing Stripe PaymentIntent ID. Payment left unchanged.",
+        updatedBy,
+      });
+    } else {
       try {
-        refundResult = await stripe.refunds.create({
+        const refundResult = await stripe.refunds.create({
           payment_intent: order.stripePaymentIntentId,
         });
         console.log(
           `↩️ Stripe refund created for order ${order._id}: ${refundResult.id}`
         );
+        order.paymentStatus = "refunded";
+        order.isPaid = false;
+        order.statusHistory.push({
+          status: "payment_refunded",
+          note: `Payment refunded via Stripe. Refund ID: ${refundResult.id}`,
+          updatedBy,
+        });
       } catch (error) {
         console.error(
           `Failed to refund Stripe payment for order ${order._id}:`,
           error.message
         );
+        order.statusHistory.push({
+          status: "refund_failed",
+          note: `Refund failed: ${error.message}. Payment NOT marked as refunded.`,
+          updatedBy,
+        });
       }
     }
-
-    order.paymentStatus = "refunded";
-    order.isPaid = false;
-    order.statusHistory.push({
-      status: "payment_refunded",
-      note: refundResult
-        ? `Payment refunded via Stripe. Refund ID: ${refundResult.id}`
-        : "Payment marked as refunded due to cancellation",
-      updatedBy: req.user?.role === "admin" ? "seller" : "customer",
-    });
   }
 
   order.deliveryStatus = "cancelled";
@@ -651,7 +708,18 @@ const confirmCardOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  if (order.paymentStatus !== "authorized") {
+  if (order.deliveryStatus !== "pending") {
+    return next(
+      new ApiError(
+        `Cannot confirm. Delivery status is: ${order.deliveryStatus}`,
+        400
+      )
+    );
+  }
+
+  // M1: Payment is captured at checkout (paymentStatus "confirmed"), so this
+  // endpoint is the seller's DELIVERY confirmation step for card orders.
+  if (!["authorized", "confirmed"].includes(order.paymentStatus)) {
     return next(
       new ApiError(
         `Cannot confirm. Payment status is: ${order.paymentStatus}`,
@@ -660,7 +728,11 @@ const confirmCardOrder = asyncHandler(async (req, res, next) => {
     );
   }
 
-  order.paymentStatus = "confirmed";
+  // Payment may already be "confirmed" (captured at checkout); only promote
+  // "authorized" -> "confirmed" so the flow is correct in both cases.
+  if (order.paymentStatus === "authorized") {
+    order.paymentStatus = "confirmed";
+  }
   order.deliveryStatus = "confirmed";
   order.statusHistory.push({
     status: "confirmed",
